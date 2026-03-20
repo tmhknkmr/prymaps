@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import type { Photo, Layer, Profile } from '@/types/database'
 
@@ -54,8 +55,12 @@ export default function PhotoDetailModal({ photo, onClose, onUpdate, isOwner }: 
     ? new Date(photo.taken_at).toLocaleString('ja-JP')
     : null
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+  if (!mounted) return null
+
+  const modal = (
+    <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" style={{ zIndex: 9999 }}>
       <div className="bg-[#111118] border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto fade-in">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
@@ -193,4 +198,5 @@ export default function PhotoDetailModal({ photo, onClose, onUpdate, isOwner }: 
       </div>
     </div>
   )
+  return createPortal(modal, document.body)
 }

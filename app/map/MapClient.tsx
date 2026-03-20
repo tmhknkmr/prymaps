@@ -47,8 +47,11 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
   const pinModeRef = useRef(false)
   const supabase = createClient()
 
-  // pinModeRef を pinMode と同期（Leafletイベントのstale closure対策）
-  useEffect(() => { pinModeRef.current = pinMode }, [pinMode])
+  // pinModeRef を同期更新するラッパー（useEffectでは遅延が発生するため）
+  const setPinModeSync = useCallback((val: boolean) => {
+    pinModeRef.current = val
+    setPinMode(val)
+  }, [])
 
   // 保存済み設定がなければ現在地を取得
   useEffect(() => {
@@ -133,11 +136,12 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
 
   const handleMapClick = useCallback((lat: number, lng: number) => {
     if (pinModeRef.current) {
+      setPinModeSync(false)
       setPendingPin({ lat, lng })
-      setPinMode(false)
-      setShowUpload(true)
+      // setTimeout で Leaflet イベント処理完了後に modal を開く
+      setTimeout(() => setShowUpload(true), 0)
     }
-  }, [])
+  }, [setPinModeSync])
 
   const handleMoveEnd = useCallback((lat: number, lng: number, zoom: number) => {
     if (saveSettingsTimeout.current) clearTimeout(saveSettingsTimeout.current)
@@ -224,10 +228,9 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
               return
             }
             if (pinMode) {
-              // ピンモードをキャンセル
-              setPinMode(false)
+              setPinModeSync(false)
             } else {
-              setPinMode(true)
+              setPinModeSync(true)
             }
           }}
           className={`absolute top-6 right-6 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition ${

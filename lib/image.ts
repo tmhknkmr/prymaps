@@ -9,10 +9,12 @@ export interface ExifData {
 
 export async function extractExif(file: File): Promise<ExifData> {
   try {
-    const data = await exifr.parse(file, {
+    const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 3000))
+    const parse = exifr.parse(file, {
       gps: true,
       pick: ['GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef', 'DateTimeOriginal', 'CreateDate'],
     })
+    const data = await Promise.race([parse, timeout])
 
     if (!data) return { lat: null, lng: null, takenAt: null }
 
