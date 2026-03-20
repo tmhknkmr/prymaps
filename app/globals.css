@@ -19,9 +19,6 @@ body {
   background: #1a1a2e;
 }
 
-.leaflet-tile-pane {
-  filter: brightness(0.8) saturate(0.8);
-}
 
 /* Photo popup */
 .leaflet-popup-content-wrapper {

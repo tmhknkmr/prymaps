@@ -42,8 +42,22 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
   const [pinMode, setPinMode] = useState(false)
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoWithMeta | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [geoCenter, setGeoCenter] = useState<[number, number] | null>(null)
   const saveSettingsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pinModeRef = useRef(false)
   const supabase = createClient()
+
+  // pinModeRef を pinMode と同期（Leafletイベントのstale closure対策）
+  useEffect(() => { pinModeRef.current = pinMode }, [pinMode])
+
+  // 保存済み設定がなければ現在地を取得
+  useEffect(() => {
+    if (mapSettings) return
+    navigator.geolocation?.getCurrentPosition(
+      pos => setGeoCenter([pos.coords.latitude, pos.coords.longitude]),
+      () => {} // 失敗時は東京をデフォルトに
+    )
+  }, [mapSettings])
 
   const fetchLayers = useCallback(async () => {
     const { data } = await supabase
@@ -114,10 +128,12 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
   useEffect(() => { fetchPhotos() }, [fetchPhotos])
 
   const handleMapClick = useCallback((lat: number, lng: number) => {
-    if (pinMode) {
+    if (pinModeRef.current) {
       setPendingPin({ lat, lng })
+      setPinMode(false)
+      setShowUpload(true)
     }
-  }, [pinMode])
+  }, [])
 
   const handleMoveEnd = useCallback((lat: number, lng: number, zoom: number) => {
     if (saveSettingsTimeout.current) clearTimeout(saveSettingsTimeout.current)
@@ -189,7 +205,7 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           photos={displayedPhotos}
           onMapClick={handleMapClick}
           onPhotoClick={setSelectedPhoto}
-          center={mapSettings ? [mapSettings.center_lat, mapSettings.center_lng] : [35.6812, 139.7671]}
+          center={mapSettings ? [mapSettings.center_lat, mapSettings.center_lng] : (geoCenter ?? [35.6812, 139.7671])}
           zoom={mapSettings?.zoom || 12}
           onMoveEnd={handleMoveEnd}
           pendingPin={pendingPin}
@@ -203,38 +219,29 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
               setActivePanel('layers')
               return
             }
-            setPinMode(!pinMode)
             if (pinMode) {
-              setShowUpload(true)
+              // ピンモードをキャンセル
               setPinMode(false)
+            } else {
+              setPinMode(true)
             }
           }}
-          className={`absolute bottom-6 right-6 z-10 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition ${
+          className={`absolute top-6 right-6 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition ${
             pinMode
-              ? 'bg-blue-500 text-white animate-pulse'
+              ? 'bg-blue-500 text-white'
               : 'bg-white text-gray-900 hover:bg-gray-100'
           }`}
-          title={pinMode ? 'クリックして位置を確定' : '写真をアップロード'}
+          title={pinMode ? 'キャンセル' : '写真をアップロード'}
+          style={{ zIndex: 1000 }}
         >
-          {pinMode ? '📍' : '+'}
+          {pinMode ? '×' : '+'}
         </button>
 
         {pinMode && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
-            <div className="bg-black/60 text-white text-sm px-4 py-2 rounded-full backdrop-blur-sm">
-              地図をクリックして位置を指定
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" style={{ zIndex: 1000 }}>
+            <div className="bg-black/70 text-white text-sm px-5 py-2.5 rounded-full backdrop-blur-sm shadow-lg">
+              📍 地図をクリックして写真の位置を指定
             </div>
-          </div>
-        )}
-
-        {pendingPin && pinMode && (
-          <div className="absolute bottom-24 right-6 z-10">
-            <button
-              onClick={() => { setShowUpload(true); setPinMode(false) }}
-              className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-lg hover:bg-blue-500 transition"
-            >
-              この位置で続ける →
-            </button>
           </div>
         )}
       </div>

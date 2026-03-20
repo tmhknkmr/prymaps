@@ -23,7 +23,7 @@ export default function AuthForm() {
       },
     })
     if (error) {
-      setError(error.message)
+      setError('Googleログインに失敗しました。Supabaseの設定を確認してください。')
       setLoading(false)
     }
   }

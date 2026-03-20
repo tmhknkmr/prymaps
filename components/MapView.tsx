@@ -43,18 +43,26 @@ export default function MapView({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
 
+    // Leaflet が既に初期化済みのコンテナをクリア（React Strict Mode 対策）
+    const container = containerRef.current as HTMLDivElement & { _leaflet_id?: number }
+    if (container._leaflet_id) {
+      delete container._leaflet_id
+    }
+
     const initMap = async () => {
       const L = (await import('leaflet')).default
       await import('leaflet/dist/leaflet.css')
 
-      const map = L.map(containerRef.current!, {
+      if (!containerRef.current) return
+
+      const map = L.map(containerRef.current, {
         center,
         zoom,
         zoomControl: false,
       })
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19,
       }).addTo(map)
 

@@ -78,30 +78,35 @@ alter table public.photos enable row level security;
 alter table public.map_view_settings enable row level security;
 
 -- Profiles policies
+drop policy if exists "Profiles are viewable by everyone" on public.profiles;
+drop policy if exists "Users can insert their own profile" on public.profiles;
+drop policy if exists "Users can update their own profile" on public.profiles;
 create policy "Profiles are viewable by everyone" on public.profiles
   for select using (true);
-
 create policy "Users can insert their own profile" on public.profiles
   for insert with check (auth.uid() = id);
-
 create policy "Users can update their own profile" on public.profiles
   for update using (auth.uid() = id);
 
 -- Archives policies
+drop policy if exists "Public archives are viewable by everyone" on public.archives;
+drop policy if exists "Users can manage their own archive" on public.archives;
 create policy "Public archives are viewable by everyone" on public.archives
   for select using (true);
-
 create policy "Users can manage their own archive" on public.archives
   for all using (auth.uid() = user_id);
 
 -- Layers policies
+drop policy if exists "Public layers are viewable by everyone" on public.layers;
+drop policy if exists "Users can manage their own layers" on public.layers;
 create policy "Public layers are viewable by everyone" on public.layers
   for select using (is_public = true or auth.uid() = user_id);
-
 create policy "Users can manage their own layers" on public.layers
   for all using (auth.uid() = user_id);
 
 -- Photos policies
+drop policy if exists "Public photos in public layers are viewable" on public.photos;
+drop policy if exists "Users can manage their own photos" on public.photos;
 create policy "Public photos in public layers are viewable" on public.photos
   for select using (
     auth.uid() = user_id
@@ -113,11 +118,11 @@ create policy "Public photos in public layers are viewable" on public.photos
       )
     )
   );
-
 create policy "Users can manage their own photos" on public.photos
   for all using (auth.uid() = user_id);
 
 -- Map view settings policies
+drop policy if exists "Users can manage their own map settings" on public.map_view_settings;
 create policy "Users can manage their own map settings" on public.map_view_settings
   for all using (auth.uid() = user_id);
 
@@ -165,6 +170,11 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists profiles_updated_at on public.profiles;
+drop trigger if exists archives_updated_at on public.archives;
+drop trigger if exists layers_updated_at on public.layers;
+drop trigger if exists photos_updated_at on public.photos;
+drop trigger if exists map_view_settings_updated_at on public.map_view_settings;
 create trigger profiles_updated_at before update on public.profiles
   for each row execute procedure public.handle_updated_at();
 create trigger archives_updated_at before update on public.archives
@@ -182,14 +192,15 @@ values ('photos', 'photos', true, 5242880, array['image/webp', 'image/jpeg', 'im
 on conflict (id) do nothing;
 
 -- Storage policies
+drop policy if exists "Public photos are viewable by everyone" on storage.objects;
+drop policy if exists "Authenticated users can upload photos" on storage.objects;
+drop policy if exists "Users can update their own photos" on storage.objects;
+drop policy if exists "Users can delete their own photos" on storage.objects;
 create policy "Public photos are viewable by everyone" on storage.objects
   for select using (bucket_id = 'photos');
-
 create policy "Authenticated users can upload photos" on storage.objects
   for insert with check (bucket_id = 'photos' and auth.role() = 'authenticated');
-
 create policy "Users can update their own photos" on storage.objects
   for update using (bucket_id = 'photos' and auth.uid()::text = (storage.foldername(name))[1]);
-
 create policy "Users can delete their own photos" on storage.objects
   for delete using (bucket_id = 'photos' and auth.uid()::text = (storage.foldername(name))[1]);
