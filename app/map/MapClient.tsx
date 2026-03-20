@@ -27,6 +27,12 @@ interface Props {
 
 type PanelTab = 'layers' | 'discover' | null
 
+interface NominatimResult {
+  display_name: string
+  lat: string
+  lon: string
+}
+
 export default function MapClient({ userId, archive, initialLayers, mapSettings, profile }: Props) {
   const [layers, setLayers] = useState<Layer[]>(initialLayers)
   const [photos, setPhotos] = useState<PhotoWithMeta[]>([])
@@ -43,24 +49,46 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoWithMeta | null>(null)
   const [exporting, setExporting] = useState(false)
   const [geoCenter, setGeoCenter] = useState<[number, number] | null>(null)
+
+  // 場所検索
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<NominatimResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [showResults, setShowResults] = useState(false)
+
+  // flyTo（検索・現在地ボタン用）
+  const [flyToTarget, setFlyToTarget] = useState<{ lat: number; lng: number; zoom?: number } | null>(null)
+
   const saveSettingsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pinModeRef = useRef(false)
+  const searchRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
 
-  // pinModeRef を同期更新するラッパー（useEffectでは遅延が発生するため）
+  // pinModeRef を同期更新するラッパー
   const setPinModeSync = useCallback((val: boolean) => {
     pinModeRef.current = val
     setPinMode(val)
   }, [])
 
-  // 保存済み設定がなければ現在地を取得
+  // 初回ジオロケーション（保存済み設定がなければ現在地へ）
   useEffect(() => {
     if (mapSettings) return
     navigator.geolocation?.getCurrentPosition(
       pos => setGeoCenter([pos.coords.latitude, pos.coords.longitude]),
-      () => {} // 失敗時は東京をデフォルトに
+      () => {}
     )
   }, [mapSettings])
+
+  // 検索ドロップダウンの外クリックで閉じる
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowResults(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   const fetchLayers = useCallback(async () => {
     const { data } = await supabase
@@ -81,52 +109,50 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
 
   const fetchPhotos = useCallback(async () => {
     try {
-    const myLayerIds = layers.map(l => l.id)
+      const myLayerIds = layers.map(l => l.id)
 
-    // Own photos
-    let ownPhotos: PhotoWithMeta[] = []
-    if (myLayerIds.length > 0) {
-      const { data: myData } = await supabase
+      let ownPhotos: PhotoWithMeta[] = []
+      if (myLayerIds.length > 0) {
+        const { data: myData } = await supabase
+          .from('photos')
+          .select('*')
+          .in('layer_id', myLayerIds)
+
+        if (myData) {
+          const typedMyData = myData as Photo[]
+          const layerMap = new Map(layers.map(l => [l.id, l]))
+          ownPhotos = typedMyData
+            .filter(p => visibleLayerIds.has(p.layer_id))
+            .map(p => ({
+              ...p,
+              layer: layerMap.get(p.layer_id)!,
+              profile: profile!,
+            }))
+            .filter(p => p.layer)
+        }
+      }
+
+      type PublicPhotoRow = Photo & { layers: Layer; profiles: Profile }
+      const { data: publicRaw } = await supabase
         .from('photos')
-        .select('*')
-        .in('layer_id', myLayerIds)
+        .select(`*, layers!photos_layer_id_fkey(*), profiles!photos_user_id_fkey(*)`)
+        .eq('is_public', true)
+        .neq('user_id', userId)
 
-      if (myData) {
-        const typedMyData = myData as Photo[]
-        const layerMap = new Map(layers.map(l => [l.id, l]))
-        ownPhotos = typedMyData
-          .filter(p => visibleLayerIds.has(p.layer_id))
+      const publicData = publicRaw as unknown as PublicPhotoRow[]
+
+      let publicPhotos: PhotoWithMeta[] = []
+      if (publicData) {
+        publicPhotos = publicData
+          .filter(p => p.layers?.is_public && !hiddenUserIds.has(p.user_id))
           .map(p => ({
             ...p,
-            layer: layerMap.get(p.layer_id)!,
-            profile: profile!,
+            layer: p.layers,
+            profile: p.profiles,
           }))
-          .filter(p => p.layer)
       }
-    }
 
-    // Public photos from other users
-    type PublicPhotoRow = Photo & { layers: Layer; profiles: Profile }
-    const { data: publicRaw } = await supabase
-      .from('photos')
-      .select(`*, layers!photos_layer_id_fkey(*), profiles!photos_user_id_fkey(*)`)
-      .eq('is_public', true)
-      .neq('user_id', userId)
-
-    const publicData = publicRaw as unknown as PublicPhotoRow[]
-
-    let publicPhotos: PhotoWithMeta[] = []
-    if (publicData) {
-      publicPhotos = publicData
-        .filter(p => p.layers?.is_public && !hiddenUserIds.has(p.user_id))
-        .map(p => ({
-          ...p,
-          layer: p.layers,
-          profile: p.profiles,
-        }))
-    }
-
-    setPhotos([...ownPhotos, ...publicPhotos])
+      setPhotos([...ownPhotos, ...publicPhotos])
     } catch (e) {
       console.error('fetchPhotos error:', e)
     }
@@ -138,7 +164,6 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
     if (pinModeRef.current) {
       setPinModeSync(false)
       setPendingPin({ lat, lng })
-      // setTimeout で Leaflet イベント処理完了後に modal を開く
       setTimeout(() => setShowUpload(true), 0)
     }
   }, [setPinModeSync])
@@ -169,7 +194,6 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
       const next = new Set(prev)
       if (next.has(uid)) next.delete(uid)
       else next.add(uid)
-      // Persist
       supabase.from('map_view_settings').update({
         hidden_user_ids: Array.from(next),
       }).eq('user_id', userId).then(() => {})
@@ -188,7 +212,7 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           data.map(p => ({
             ...p,
             layer_name: layerMap.get(p.layer_id)?.name || 'Unknown',
-            layer_color: layerMap.get(p.layer_id)?.color || '#3B82F6',
+            layer_color: layerMap.get(p.layer_id)?.color || '#6366f1',
           })),
           archive?.name || 'My Archive'
         )
@@ -201,6 +225,42 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     window.location.href = '/'
+  }
+
+  // 場所検索（Nominatim / OSM）
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!searchQuery.trim()) return
+    setSearching(true)
+    setShowResults(false)
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=6&accept-language=ja`,
+        { headers: { 'User-Agent': 'PRY/1.0 (prymaps.com)' } }
+      )
+      const data: NominatimResult[] = await res.json()
+      setSearchResults(data)
+      setShowResults(true)
+    } catch {
+      // silent
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const handleSearchSelect = (result: NominatimResult) => {
+    setFlyToTarget({ lat: parseFloat(result.lat), lng: parseFloat(result.lon), zoom: 14 })
+    setSearchQuery(result.display_name.split(',')[0])
+    setShowResults(false)
+    setSearchResults([])
+  }
+
+  // 現在地ボタン
+  const handleLocate = () => {
+    navigator.geolocation?.getCurrentPosition(
+      pos => setFlyToTarget({ lat: pos.coords.latitude, lng: pos.coords.longitude, zoom: 15 }),
+      () => alert('現在地を取得できませんでした。ブラウザの位置情報を許可してください。')
+    )
   }
 
   const displayedPhotos = photos.filter(p => p.lat !== null && p.lng !== null)
@@ -217,9 +277,89 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           zoom={mapSettings?.zoom || 12}
           onMoveEnd={handleMoveEnd}
           pendingPin={pendingPin}
+          pinMode={pinMode}
+          flyToTarget={flyToTarget}
+          onFlyToHandled={() => setFlyToTarget(null)}
         />
 
-        {/* Upload FAB */}
+        {/* 場所検索バー */}
+        <div
+          ref={searchRef}
+          className="absolute top-5 left-5"
+          style={{ zIndex: 1000 }}
+        >
+          <form onSubmit={handleSearch} className="relative flex gap-2">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => {
+                  setSearchQuery(e.target.value)
+                  if (!e.target.value) setShowResults(false)
+                }}
+                onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                placeholder="場所を検索..."
+                className="w-56 pl-4 pr-10 py-2.5 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none"
+                style={{
+                  background: 'rgba(255,255,255,0.96)',
+                  boxShadow: '0 2px 16px rgba(0,0,0,0.14)',
+                }}
+              />
+              <button
+                type="submit"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                style={{ fontSize: '16px' }}
+              >
+                {searching ? '…' : '⌕'}
+              </button>
+            </div>
+
+            {/* 現在地ボタン */}
+            <button
+              type="button"
+              onClick={handleLocate}
+              className="flex items-center justify-center rounded-xl transition hover:scale-105"
+              style={{
+                width: '42px',
+                height: '42px',
+                background: 'rgba(255,255,255,0.96)',
+                boxShadow: '0 2px 16px rgba(0,0,0,0.14)',
+                fontSize: '18px',
+                flexShrink: 0,
+              }}
+              title="現在地へ"
+            >
+              ◎
+            </button>
+          </form>
+
+          {/* 検索結果ドロップダウン */}
+          {showResults && searchResults.length > 0 && (
+            <div
+              className="mt-1.5 rounded-xl overflow-hidden"
+              style={{
+                background: 'white',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
+                maxHeight: '240px',
+                overflowY: 'auto',
+                width: '280px',
+              }}
+            >
+              {searchResults.map((r, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleSearchSelect(r)}
+                  className="w-full text-left px-4 py-2.5 text-xs hover:bg-gray-50 transition border-b border-gray-100 last:border-0"
+                >
+                  <span className="font-medium text-gray-800">{r.display_name.split(',')[0]}</span>
+                  <span className="text-gray-400 ml-1">{r.display_name.split(',').slice(1, 3).join(',')}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 写真を置くボタン */}
         <button
           onClick={() => {
             if (layers.length === 0) {
@@ -227,27 +367,32 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
               setActivePanel('layers')
               return
             }
-            if (pinMode) {
-              setPinModeSync(false)
-            } else {
-              setPinModeSync(true)
-            }
+            setPinModeSync(!pinMode)
           }}
-          className={`absolute top-6 right-6 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition ${
-            pinMode
-              ? 'bg-blue-500 text-white'
-              : 'bg-white text-gray-900 hover:bg-gray-100'
-          }`}
-          title={pinMode ? 'キャンセル' : '写真をアップロード'}
-          style={{ zIndex: 1000 }}
+          className="absolute top-5 right-5 flex items-center gap-2 rounded-xl font-medium text-sm transition"
+          style={{
+            zIndex: 1000,
+            padding: '0 18px',
+            height: '42px',
+            background: pinMode ? '#6366f1' : 'rgba(255,255,255,0.96)',
+            color: pinMode ? 'white' : '#1f2937',
+            boxShadow: '0 2px 16px rgba(0,0,0,0.14)',
+          }}
         >
-          {pinMode ? '×' : '+'}
+          {pinMode ? '✕ キャンセル' : '＋ 写真を置く'}
         </button>
 
+        {/* ピンモード中の案内 */}
         {pinMode && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" style={{ zIndex: 1000 }}>
-            <div className="bg-black/70 text-white text-sm px-5 py-2.5 rounded-full backdrop-blur-sm shadow-lg">
-              📍 地図をクリックして写真の位置を指定
+          <div
+            className="absolute bottom-10 left-1/2 -translate-x-1/2 pointer-events-none"
+            style={{ zIndex: 1000 }}
+          >
+            <div
+              className="text-white text-sm px-6 py-3 rounded-full"
+              style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)' }}
+            >
+              写真を置きたい場所をクリック
             </div>
           </div>
         )}
@@ -255,7 +400,6 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
 
       {/* Sidebar */}
       <div className="w-72 bg-[#0c0c14]/95 border-l border-white/10 flex flex-col backdrop-blur-xl slide-in">
-        {/* Header */}
         <div className="px-5 py-4 border-b border-white/10">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-black tracking-tighter" style={{ letterSpacing: '-0.04em' }}>PRY</h1>
@@ -279,7 +423,6 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
             </div>
           </div>
 
-          {/* Profile */}
           <div className="flex items-center gap-2 mt-3">
             <div className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex-shrink-0">
               {profile?.avatar_url ? (
@@ -298,7 +441,6 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           </div>
         </div>
 
-        {/* Tab bar */}
         <div className="flex border-b border-white/10">
           {(['layers', 'discover'] as PanelTab[]).map(tab => (
             <button
@@ -306,7 +448,7 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
               onClick={() => setActivePanel(activePanel === tab ? null : tab)}
               className={`flex-1 py-2.5 text-xs font-medium transition ${
                 activePanel === tab
-                  ? 'text-white border-b-2 border-blue-400'
+                  ? 'text-white border-b-2 border-indigo-400'
                   : 'text-white/40 hover:text-white/70'
               }`}
             >
@@ -315,7 +457,6 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           ))}
         </div>
 
-        {/* Panel content */}
         <div className="flex-1 overflow-y-auto p-4">
           {activePanel === 'layers' && archive && (
             <LayerPanel
@@ -336,7 +477,6 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           )}
         </div>
 
-        {/* Photo list (no-location) */}
         <div className="border-t border-white/10 p-4">
           <p className="text-white/30 text-xs mb-2">
             📍 {displayedPhotos.filter(p => p.user_id === userId).length} /
@@ -356,7 +496,6 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
         </div>
       </div>
 
-      {/* Upload Modal */}
       {showUpload && (
         <PhotoUploadModal
           layers={layers}
@@ -373,7 +512,6 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
         />
       )}
 
-      {/* Photo Detail Modal */}
       {selectedPhoto && (
         <PhotoDetailModal
           photo={selectedPhoto}

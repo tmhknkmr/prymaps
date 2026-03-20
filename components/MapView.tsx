@@ -18,6 +18,9 @@ interface MapViewProps {
   zoom?: number
   onMoveEnd?: (lat: number, lng: number, zoom: number) => void
   pendingPin?: { lat: number; lng: number } | null
+  pinMode?: boolean
+  flyToTarget?: { lat: number; lng: number; zoom?: number } | null
+  onFlyToHandled?: () => void
 }
 
 export default function MapView({
@@ -28,6 +31,9 @@ export default function MapView({
   zoom = 12,
   onMoveEnd,
   pendingPin,
+  pinMode,
+  flyToTarget,
+  onFlyToHandled,
 }: MapViewProps) {
   const mapRef = useRef<LeafletMap | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -53,7 +59,6 @@ export default function MapView({
 
       if (!containerRef.current || mapRef.current) return
 
-      // Clear any stale Leaflet instance on the container
       const el = containerRef.current as HTMLDivElement & { _leaflet_id?: number }
       if (el._leaflet_id) delete el._leaflet_id
 
@@ -63,9 +68,9 @@ export default function MapView({
         zoomControl: false,
       })
 
-      // CartoDB Voyager: shows streets, buildings, parks, water clearly
+      // CartoDB Voyager — 道路・建物・公園・水域を自然な色調で表示
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19,
         subdomains: 'abcd',
       }).addTo(map)
@@ -96,7 +101,14 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Fly to center when it changes (for geolocation)
+  // 外部からの flyTo（検索・現在地ボタン）
+  useEffect(() => {
+    if (!mapRef.current || !flyToTarget) return
+    mapRef.current.flyTo([flyToTarget.lat, flyToTarget.lng], flyToTarget.zoom ?? 14, { duration: 1.2 })
+    onFlyToHandled?.()
+  }, [flyToTarget, onFlyToHandled])
+
+  // center prop 変化時のフライ（初回ジオロケーション解決）
   const prevCenterRef = useRef<[number, number]>(center)
   useEffect(() => {
     if (!mapRef.current) return
@@ -108,7 +120,7 @@ export default function MapView({
     }
   }, [center, zoom])
 
-  // Update markers
+  // マーカー更新 — 写真サムネイルを地図に「置く」
   useEffect(() => {
     if (!mapRef.current) return
 
@@ -130,34 +142,53 @@ export default function MapView({
         if (photo.lat == null || photo.lng == null) continue
         if (markersRef.current[photo.id]) continue
 
-        const color = photo.layer?.color || '#3B82F6'
+        const imgUrl = getPhotoUrl(photo.storage_path)
+        const color = photo.layer?.color || '#6366f1'
+        const takenDate = photo.taken_at
+          ? new Date(photo.taken_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' })
+          : ''
 
+        // 写真が地図上に「佇む」サムネイルマーカー
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 28],
+          html: `
+            <div style="
+              width:52px;height:52px;
+              border-radius:5px;
+              overflow:hidden;
+              border:2.5px solid rgba(255,255,255,0.95);
+              box-shadow:0 4px 16px rgba(0,0,0,0.22),0 1px 4px rgba(0,0,0,0.14);
+              background:#d1d5db;
+              cursor:pointer;
+            ">
+              <img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy"/>
+            </div>
+          `,
+          iconSize: [52, 52],
+          iconAnchor: [26, 26],
           popupAnchor: [0, -32],
         })
 
         const marker = L.marker([photo.lat, photo.lng], { icon })
-        const imgUrl = getPhotoUrl(photo.storage_path)
-        const takenDate = photo.taken_at ? new Date(photo.taken_at).toLocaleDateString('ja-JP') : ''
 
         marker.bindPopup(`
-          <div style="width:200px;overflow:hidden;border-radius:10px;">
-            <img src="${imgUrl}" alt="" style="width:100%;height:130px;object-fit:cover;display:block;cursor:pointer;"
-              onclick="window.__pryPhotoClick&&window.__pryPhotoClick('${photo.id}')"/>
+          <div style="width:220px;overflow:hidden;border-radius:12px;background:#13131f;">
+            <div style="position:relative;">
+              <img src="${imgUrl}" alt="" style="width:100%;height:140px;object-fit:cover;display:block;cursor:pointer;"
+                onclick="window.__pryPhotoClick&&window.__pryPhotoClick('${photo.id}')"/>
+            </div>
             <div style="padding:10px 12px;">
-              <p style="font-size:13px;font-weight:600;color:white;margin:0 0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${photo.title || photo.filename}</p>
-              ${takenDate ? `<p style="font-size:11px;color:rgba(255,255,255,0.4);margin:0;">${takenDate}</p>` : ''}
-              <p style="font-size:11px;color:rgba(255,255,255,0.3);margin:4px 0 0;">
-                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:4px;"></span>
+              <p style="font-size:13px;font-weight:600;color:white;margin:0 0 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                ${photo.title || photo.filename}
+              </p>
+              ${takenDate ? `<p style="font-size:11px;color:rgba(255,255,255,0.4);margin:0 0 2px;">${takenDate}</p>` : ''}
+              <p style="font-size:11px;color:rgba(255,255,255,0.3);margin:0;">
+                <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:4px;vertical-align:middle;"></span>
                 ${photo.layer?.name || ''}
               </p>
             </div>
           </div>
-        `, { maxWidth: 220, minWidth: 200 })
+        `, { maxWidth: 240, minWidth: 220 })
 
         marker.addTo(map)
         markersRef.current[photo.id] = marker
@@ -172,7 +203,7 @@ export default function MapView({
     updateMarkers().catch(console.error)
   }, [photos, onPhotoClick, getPhotoUrl])
 
-  // Pending pin marker
+  // 配置中の仮ピン
   useEffect(() => {
     if (!mapRef.current) return
 
@@ -187,9 +218,17 @@ export default function MapView({
       if (pendingPin) {
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width:20px;height:20px;border-radius:50%;background:white;border:3px solid #3B82F6;box-shadow:0 0 0 4px rgba(59,130,246,0.3),0 2px 8px rgba(0,0,0,0.4);"></div>`,
-          iconSize: [20, 20],
-          iconAnchor: [10, 10],
+          html: `
+            <div style="
+              width:22px;height:22px;
+              border-radius:4px;
+              background:white;
+              border:2.5px solid #6366f1;
+              box-shadow:0 0 0 5px rgba(99,102,241,0.25),0 2px 10px rgba(0,0,0,0.3);
+            "></div>
+          `,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
         })
         pendingMarkerRef.current = L.marker([pendingPin.lat, pendingPin.lng], { icon }).addTo(map)
       }
@@ -198,5 +237,11 @@ export default function MapView({
     update().catch(console.error)
   }, [pendingPin])
 
-  return <div ref={containerRef} className="w-full h-full" />
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full"
+      style={{ cursor: pinMode ? 'crosshair' : undefined }}
+    />
+  )
 }
