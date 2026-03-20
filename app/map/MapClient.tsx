@@ -77,6 +77,7 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
   }, [userId, supabase])
 
   const fetchPhotos = useCallback(async () => {
+    try {
     const myLayerIds = layers.map(l => l.id)
 
     // Own photos
@@ -123,6 +124,9 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
     }
 
     setPhotos([...ownPhotos, ...publicPhotos])
+    } catch (e) {
+      console.error('fetchPhotos error:', e)
+    }
   }, [layers, visibleLayerIds, hiddenUserIds, userId, profile, supabase])
 
   useEffect(() => { fetchPhotos() }, [fetchPhotos])
@@ -356,10 +360,11 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           defaultPin={pendingPin}
           userId={userId}
           onClose={() => { setShowUpload(false); setPendingPin(null) }}
-          onSuccess={() => {
+          onSuccess={async () => {
             setShowUpload(false)
             setPendingPin(null)
-            fetchPhotos()
+            await fetchLayers()
+            await fetchPhotos()
           }}
           onPinChange={(lat, lng) => setPendingPin({ lat, lng })}
         />
