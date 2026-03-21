@@ -68,11 +68,17 @@ export default function MapView({
         zoomControl: false,
       })
 
-      // CartoDB Voyager — 道路・建物・公園・水域を自然な色調で表示
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+      // Esri World Imagery — 高品質衛星写真（完全無料・APIキー不要）
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri — Source: Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN',
         maxZoom: 19,
-        subdomains: 'abcd',
+      }).addTo(map)
+
+      // 地名・道路ラベルを衛星写真の上に重ねる（Esri Reference Overlay）
+      L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '',
+        maxZoom: 19,
+        opacity: 0.8,
       }).addTo(map)
 
       L.control.zoom({ position: 'bottomright' }).addTo(map)
