@@ -86,14 +86,15 @@ export default function MapView({
       map.createPane('naturalPane')
       const naturalPaneEl = map.getPane('naturalPane')!
       naturalPaneEl.style.zIndex = '300'
-      // multiply: 白を透過して水域(青)・緑地(緑)のカラーだけを衛星に乗せる
+      // multiply で白を透過、saturate を大幅強化して水域・緑を鮮やかにポップ表示
       naturalPaneEl.style.mixBlendMode = 'multiply'
+      naturalPaneEl.style.filter = 'saturate(6) contrast(1.3) brightness(0.78)'
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19,
         subdomains: 'abcd',
-        opacity: 0.85,
+        opacity: 1.0,
         pane: 'naturalPane',
       }).addTo(map)
 
