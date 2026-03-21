@@ -74,7 +74,7 @@ export default function MapView({
       const satPaneEl = map.getPane('satellitePane')!
       satPaneEl.style.zIndex = '200'
       // grayscale → brightness高め・contrast低め → 白く抜けた表現
-      satPaneEl.style.filter = 'grayscale(1) brightness(2.1) contrast(0.38)'
+      satPaneEl.style.filter = 'grayscale(1) brightness(1.55) contrast(0.52)'
 
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles © Esri',
@@ -88,8 +88,9 @@ export default function MapView({
       naturalPaneEl.style.zIndex = '300'
       // screen: 暗い部分が色として浮かび上がる → 水域・緑が明るくポップに発色
       // CartoDB を暗め(brightness 0.4)にしてからスクリーンすると色が鮮やかに乗る
+      // screen × 彩度強化で水域・緑地を爽やかに発色
       naturalPaneEl.style.mixBlendMode = 'screen'
-      naturalPaneEl.style.filter = 'saturate(7) brightness(0.4) contrast(1.5)'
+      naturalPaneEl.style.filter = 'saturate(10) brightness(0.32) contrast(1.8)'
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
