@@ -279,10 +279,45 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
 
   const displayedPhotos = photos.filter(p => p.lat !== null && p.lng !== null)
 
+  // パネルコンテンツ（デスクトップサイドバー・モバイルシート共用）
+  const panelContent = (
+    <div className="flex-1 overflow-y-auto p-4">
+      {activePanel === 'layers' && archive && (
+        <LayerPanel
+          layers={layers}
+          archiveId={archive.id}
+          userId={userId}
+          onLayersChange={fetchLayers}
+          visibleLayerIds={visibleLayerIds}
+          onToggleLayer={handleToggleLayer}
+        />
+      )}
+      {activePanel === 'discover' && (
+        <PublicUsersPanel
+          currentUserId={userId}
+          hiddenUserIds={hiddenUserIds}
+          onToggleUser={handleToggleUser}
+        />
+      )}
+    </div>
+  )
+
+  // FABクリックハンドラ
+  const handleFabClick = () => {
+    if (pinMode) { setPinModeSync(false); setPendingFiles([]); return }
+    if (layers.length === 0) {
+      alert('まずレイヤを作成してください')
+      setActivePanel('layers')
+      return
+    }
+    setShowFlowMenu(v => !v)
+  }
+
   return (
-    <div className="relative w-full h-full flex">
-      {/* Map */}
-      <div className="flex-1 relative">
+    <div className="relative w-full h-full flex flex-col md:flex-row overflow-hidden">
+
+      {/* ── マップエリア ── */}
+      <div className="flex-1 relative min-h-0">
         <MapView
           photos={displayedPhotos}
           onMapClick={handleMapClick}
@@ -296,75 +331,41 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           onFlyToHandled={() => setFlyToTarget(null)}
         />
 
-        {/* 場所検索バー */}
+        {/* 場所検索バー（モバイル: 全幅、デスクトップ: 固定幅） */}
         <div
           ref={searchRef}
-          className="absolute top-5 left-5"
+          className="absolute top-4 left-4 right-20 md:right-auto"
           style={{ zIndex: 1000 }}
         >
-          <form onSubmit={handleSearch} className="relative flex gap-2">
-            <div className="relative">
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <div className="relative flex-1 md:flex-none">
               <input
                 type="text"
                 value={searchQuery}
-                onChange={e => {
-                  setSearchQuery(e.target.value)
-                  if (!e.target.value) setShowResults(false)
-                }}
+                onChange={e => { setSearchQuery(e.target.value); if (!e.target.value) setShowResults(false) }}
                 onFocus={() => searchResults.length > 0 && setShowResults(true)}
                 placeholder="場所を検索..."
-                className="w-56 pl-4 pr-10 py-2.5 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none"
-                style={{
-                  background: 'rgba(255,255,255,0.96)',
-                  boxShadow: '0 2px 16px rgba(0,0,0,0.14)',
-                }}
+                className="w-full md:w-52 pl-4 pr-9 rounded-xl text-sm text-gray-800 placeholder-gray-400 outline-none"
+                style={{ background: 'rgba(255,255,255,0.96)', boxShadow: '0 2px 16px rgba(0,0,0,0.14)', height: '42px' }}
               />
-              <button
-                type="submit"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
-                style={{ fontSize: '16px' }}
-              >
+              <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-base">
                 {searching ? '…' : '⌕'}
               </button>
             </div>
-
-            {/* 現在地ボタン */}
             <button
               type="button"
               onClick={handleLocate}
-              className="flex items-center justify-center rounded-xl transition hover:scale-105"
-              style={{
-                width: '42px',
-                height: '42px',
-                background: 'rgba(255,255,255,0.96)',
-                boxShadow: '0 2px 16px rgba(0,0,0,0.14)',
-                fontSize: '18px',
-                flexShrink: 0,
-              }}
+              className="flex items-center justify-center rounded-xl flex-shrink-0 transition"
+              style={{ width: '42px', height: '42px', background: 'rgba(255,255,255,0.96)', boxShadow: '0 2px 16px rgba(0,0,0,0.14)', fontSize: '18px' }}
               title="現在地へ"
-            >
-              ◎
-            </button>
+            >◎</button>
           </form>
 
-          {/* 検索結果ドロップダウン */}
           {showResults && searchResults.length > 0 && (
-            <div
-              className="mt-1.5 rounded-xl overflow-hidden"
-              style={{
-                background: 'white',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
-                maxHeight: '240px',
-                overflowY: 'auto',
-                width: '280px',
-              }}
-            >
+            <div className="mt-1.5 rounded-xl overflow-hidden" style={{ background: 'white', boxShadow: '0 4px 24px rgba(0,0,0,0.15)', maxHeight: '220px', overflowY: 'auto' }}>
               {searchResults.map((r, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSearchSelect(r)}
-                  className="w-full text-left px-4 py-2.5 text-xs hover:bg-gray-50 transition border-b border-gray-100 last:border-0"
-                >
+                <button key={i} onClick={() => handleSearchSelect(r)}
+                  className="w-full text-left px-4 py-2.5 text-xs hover:bg-gray-50 transition border-b border-gray-100 last:border-0">
                   <span className="font-medium text-gray-800">{r.display_name.split(',')[0]}</span>
                   <span className="text-gray-400 ml-1">{r.display_name.split(',').slice(1, 3).join(',')}</span>
                 </button>
@@ -373,133 +374,79 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           )}
         </div>
 
-        {/* 写真先行フロー用の隠しファイル入力 */}
-        <input
-          ref={photoFirstInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={e => handlePhotoFirstSelect(e.target.files)}
-        />
+        {/* 写真先行フロー用隠しファイル入力 */}
+        <input ref={photoFirstInputRef} type="file" accept="image/*" multiple className="hidden"
+          onChange={e => handlePhotoFirstSelect(e.target.files)} />
 
-        {/* 写真を置くボタン（ピンモード中はキャンセルに変化） */}
+        {/* FAB — モバイル: 右上（検索横）、デスクトップ: 右上 */}
         <button
-          onClick={() => {
-            if (pinMode) {
-              setPinModeSync(false)
-              setPendingFiles([])
-              return
-            }
-            if (layers.length === 0) {
-              alert('まずレイヤを作成してください')
-              setActivePanel('layers')
-              return
-            }
-            setShowFlowMenu(v => !v)
-          }}
-          className="absolute top-5 right-5 flex items-center gap-2 rounded-xl font-medium text-sm transition"
+          onClick={handleFabClick}
+          className="absolute top-4 right-4 flex items-center gap-2 rounded-xl font-medium text-sm transition"
           style={{
             zIndex: 1000,
-            padding: '0 18px',
+            padding: '0 14px',
             height: '42px',
             background: pinMode ? '#6366f1' : 'rgba(255,255,255,0.96)',
             color: pinMode ? 'white' : '#1f2937',
             boxShadow: '0 2px 16px rgba(0,0,0,0.14)',
+            whiteSpace: 'nowrap',
           }}
         >
-          {pinMode ? '✕ キャンセル' : '＋ 写真を置く'}
+          {pinMode ? '✕' : '＋'}
+          <span className="hidden sm:inline">{pinMode ? ' キャンセル' : ' 写真を置く'}</span>
         </button>
 
         {/* フロー選択メニュー */}
         {showFlowMenu && !pinMode && (
-          <div
-            className="absolute top-16 right-5 rounded-2xl overflow-hidden"
-            style={{
-              zIndex: 1000,
-              background: 'rgba(17,17,24,0.97)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-              minWidth: '220px',
-            }}
-          >
-            <button
-              onClick={() => {
-                setShowFlowMenu(false)
-                setPendingFiles([])
-                setPinModeSync(true)
-              }}
-              className="w-full text-left px-5 py-4 text-sm text-white/80 hover:bg-white/5 transition border-b border-white/8"
-            >
-              <p className="font-medium">📍 位置を指定してから選ぶ</p>
+          <div className="absolute top-[60px] right-4 rounded-2xl overflow-hidden"
+            style={{ zIndex: 1000, background: 'rgba(17,17,24,0.97)', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', minWidth: '200px' }}>
+            <button onClick={() => { setShowFlowMenu(false); setPendingFiles([]); setPinModeSync(true) }}
+              className="w-full text-left px-5 py-4 text-sm text-white/80 hover:bg-white/5 transition border-b border-white/10">
+              <p className="font-medium">📍 位置を先に指定</p>
               <p className="text-white/35 text-xs mt-0.5">地図をタップ → 写真を選択</p>
             </button>
-            <button
-              onClick={() => {
-                setShowFlowMenu(false)
-                photoFirstInputRef.current?.click()
-              }}
-              className="w-full text-left px-5 py-4 text-sm text-white/80 hover:bg-white/5 transition"
-            >
+            <button onClick={() => { setShowFlowMenu(false); photoFirstInputRef.current?.click() }}
+              className="w-full text-left px-5 py-4 text-sm text-white/80 hover:bg-white/5 transition">
               <p className="font-medium">🖼 写真を先に選ぶ</p>
               <p className="text-white/35 text-xs mt-0.5">写真を選択 → 地図に置く</p>
             </button>
           </div>
         )}
 
-        {/* ピンモード中の案内 */}
+        {/* ピンモード案内 — モバイルはボトムバーの上に表示 */}
         {pinMode && (
-          <div
-            className="absolute bottom-10 left-1/2 -translate-x-1/2 pointer-events-none"
-            style={{ zIndex: 1000 }}
-          >
-            <div
-              className="text-white text-sm px-6 py-3 rounded-full"
-              style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)' }}
-            >
-              {pendingFiles.length > 0
-                ? `📷 ${pendingFiles.length}枚を置く場所をクリック`
-                : '写真を置きたい場所をクリック'}
+          <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none bottom-[72px] md:bottom-10" style={{ zIndex: 1000 }}>
+            <div className="text-white text-sm px-6 py-3 rounded-full" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', whiteSpace: 'nowrap' }}>
+              {pendingFiles.length > 0 ? `📷 ${pendingFiles.length}枚を置く場所をタップ` : '写真を置く場所をタップ'}
             </div>
           </div>
         )}
       </div>
 
-      {/* Sidebar */}
-      <div className="w-72 bg-[#0c0c14]/95 border-l border-white/10 flex flex-col backdrop-blur-xl slide-in">
+      {/* ══════════════════════════════════════
+          デスクトップ: 右サイドバー
+      ══════════════════════════════════════ */}
+      <div className="hidden md:flex w-72 bg-[#0c0c14]/95 border-l border-white/10 flex-col backdrop-blur-xl slide-in">
         <div className="px-5 py-4 border-b border-white/10">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-black tracking-tighter" style={{ letterSpacing: '-0.04em' }}>PRY</h1>
+            <h1 className="text-xl font-black" style={{ letterSpacing: '-0.04em' }}>PRY</h1>
             <div className="flex items-center gap-2">
               {archive && (
-                <button
-                  onClick={handleExport}
-                  disabled={exporting}
-                  className="text-white/40 hover:text-white/80 text-xs transition disabled:opacity-50"
-                  title="エクスポート"
-                >
+                <button onClick={handleExport} disabled={exporting}
+                  className="text-white/40 hover:text-white/80 text-xs transition disabled:opacity-50">
                   {exporting ? '...' : '↓ ZIP'}
                 </button>
               )}
-              <button
-                onClick={handleSignOut}
-                className="text-white/30 hover:text-white/60 text-xs transition"
-              >
-                ログアウト
-              </button>
+              <button onClick={handleSignOut} className="text-white/30 hover:text-white/60 text-xs transition">ログアウト</button>
             </div>
           </div>
-
           <div className="flex items-center gap-2 mt-3">
             <div className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex-shrink-0">
-              {profile?.avatar_url ? (
+              {profile?.avatar_url
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs text-white/40">
-                  {(profile?.display_name || '?')[0].toUpperCase()}
-                </div>
-              )}
+                ? <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center text-xs text-white/40">{(profile?.display_name || '?')[0].toUpperCase()}</div>
+              }
             </div>
             <div>
               <p className="text-xs font-medium text-white/80">{profile?.display_name || '匿名'}</p>
@@ -510,57 +457,71 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
 
         <div className="flex border-b border-white/10">
           {(['layers', 'discover'] as PanelTab[]).map(tab => (
-            <button
-              key={tab}
+            <button key={tab}
               onClick={() => setActivePanel(activePanel === tab ? null : tab)}
-              className={`flex-1 py-2.5 text-xs font-medium transition ${
-                activePanel === tab
-                  ? 'text-white border-b-2 border-indigo-400'
-                  : 'text-white/40 hover:text-white/70'
-              }`}
-            >
+              className={`flex-1 py-2.5 text-xs font-medium transition ${activePanel === tab ? 'text-white border-b-2 border-indigo-400' : 'text-white/40 hover:text-white/70'}`}>
               {tab === 'layers' ? 'マイレイヤ' : 'みんなの写真'}
             </button>
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
-          {activePanel === 'layers' && archive && (
-            <LayerPanel
-              layers={layers}
-              archiveId={archive.id}
-              userId={userId}
-              onLayersChange={fetchLayers}
-              visibleLayerIds={visibleLayerIds}
-              onToggleLayer={handleToggleLayer}
-            />
-          )}
-          {activePanel === 'discover' && (
-            <PublicUsersPanel
-              currentUserId={userId}
-              hiddenUserIds={hiddenUserIds}
-              onToggleUser={handleToggleUser}
-            />
-          )}
-        </div>
+        {panelContent}
 
         <div className="border-t border-white/10 p-4">
           <p className="text-white/30 text-xs mb-2">
-            📍 {displayedPhotos.filter(p => p.user_id === userId).length} /
-            {photos.filter(p => p.user_id === userId).length} 枚が地図上に表示中
+            📍 {displayedPhotos.filter(p => p.user_id === userId).length} / {photos.filter(p => p.user_id === userId).length} 枚を表示中
           </p>
           {photos.filter(p => p.user_id === userId && (p.lat === null || p.lng === null)).slice(0, 3).map(p => (
-            <div
-              key={p.id}
-              className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-white/5 rounded px-1 transition"
-              onClick={() => setSelectedPhoto(p)}
-            >
+            <div key={p.id} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-white/5 rounded px-1 transition" onClick={() => setSelectedPhoto(p)}>
               <div className="w-2 h-2 rounded-full bg-white/20 flex-shrink-0" />
               <span className="text-xs text-white/40 truncate">{p.title || p.filename}</span>
               <span className="text-xs text-white/20 flex-shrink-0">位置なし</span>
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ══════════════════════════════════════
+          モバイル: ボトムシート（パネル内容）
+      ══════════════════════════════════════ */}
+      <div
+        className={`md:hidden fixed left-0 right-0 z-40 transition-transform duration-300 ease-out ${activePanel ? 'translate-y-0' : 'translate-y-full'}`}
+        style={{ bottom: '56px', maxHeight: '60vh', background: 'rgba(12,12,20,0.98)', borderTop: '1px solid rgba(255,255,255,0.1)', overflowY: 'auto' }}
+      >
+        {panelContent}
+      </div>
+
+      {/* ══════════════════════════════════════
+          モバイル: ボトムナビゲーションバー
+      ══════════════════════════════════════ */}
+      <div
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center"
+        style={{ height: '56px', background: 'rgba(10,10,18,0.97)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingBottom: 'env(safe-area-inset-bottom)', paddingLeft: '16px', paddingRight: '16px' }}
+      >
+        {/* ロゴ */}
+        <h1 className="text-base font-black mr-4 flex-shrink-0" style={{ letterSpacing: '-0.04em' }}>PRY</h1>
+
+        {/* タブ */}
+        <div className="flex flex-1 justify-center gap-1">
+          {(['layers', 'discover'] as PanelTab[]).map(tab => (
+            <button key={tab}
+              onClick={() => setActivePanel(activePanel === tab ? null : tab)}
+              className="px-4 py-1.5 rounded-lg text-xs font-medium transition"
+              style={{
+                color: activePanel === tab ? 'white' : 'rgba(255,255,255,0.35)',
+                background: activePanel === tab ? 'rgba(255,255,255,0.1)' : 'transparent',
+                minHeight: '36px',
+              }}
+            >
+              {tab === 'layers' ? 'マイレイヤ' : 'みんなの写真'}
+            </button>
+          ))}
+        </div>
+
+        {/* サインアウト */}
+        <button onClick={handleSignOut} className="text-xs flex-shrink-0 ml-2" style={{ color: 'rgba(255,255,255,0.2)', minHeight: '36px', padding: '0 4px' }}>
+          ログアウト
+        </button>
       </div>
 
       {showUpload && (
