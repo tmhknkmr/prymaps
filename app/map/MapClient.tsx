@@ -42,7 +42,7 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
   const [hiddenUserIds, setHiddenUserIds] = useState<Set<string>>(
     new Set(mapSettings?.hidden_user_ids || [])
   )
-  const [activePanel, setActivePanel] = useState<PanelTab>('layers')
+  const [activePanel, setActivePanel] = useState<PanelTab>(null)
   const [showUpload, setShowUpload] = useState(false)
   const [pendingPin, setPendingPin] = useState<{ lat: number; lng: number } | null>(null)
   const [pinMode, setPinMode] = useState(false)
@@ -498,9 +498,18 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           zIndex: 2000,   // Leaflet(1000)・FAB(1000)より確実に上
         }}
       >
-        {/* ドラッグハンドル */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-white/20" />
+        {/* シートヘッダー：タイトル＋閉じるボタン */}
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
+          <span className="text-xs font-medium text-white/40">
+            {activePanel === 'layers' ? 'マイレイヤ' : 'みんなの写真'}
+          </span>
+          <button
+            onClick={() => setActivePanel(null)}
+            className="w-7 h-7 flex items-center justify-center rounded-full text-white/40 hover:text-white transition"
+            style={{ background: 'rgba(255,255,255,0.08)' }}
+          >
+            ×
+          </button>
         </div>
         {panelContent}
       </div>
