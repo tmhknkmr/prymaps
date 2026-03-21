@@ -68,30 +68,42 @@ export default function MapView({
         zoomControl: false,
       })
 
-      // 衛星写真専用ペイン — フィルターをラベルと分離するため
+      // ── レイヤ構成（下から順） ──────────────────────────────────────
+      // 1. 衛星写真ペイン — モノクロ漂白処理
       map.createPane('satellitePane')
       const satPaneEl = map.getPane('satellitePane')!
       satPaneEl.style.zIndex = '200'
-      // 明度150%・コントラスト60% — 写真が浮かぶ透明感ある航空写真
-      satPaneEl.style.filter = 'brightness(1.5) contrast(0.6)'
+      // grayscale → brightness高め・contrast低め → 白く抜けた表現
+      satPaneEl.style.filter = 'grayscale(1) brightness(1.7) contrast(0.42)'
 
-      // Esri World Imagery — 高品質衛星写真（完全無料・APIキー不要）
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles © Esri — Source: Esri, Maxar, GeoEye, Earthstar Geographics',
+        attribution: 'Tiles © Esri',
         maxZoom: 19,
         pane: 'satellitePane',
       }).addTo(map)
 
-      // ラベルペイン — フィルターなしでクリアに表示
+      // 2. 自然要素オーバーレイペイン — CartoDB Positron で水域・緑を色付け
+      map.createPane('naturalPane')
+      const naturalPaneEl = map.getPane('naturalPane')!
+      naturalPaneEl.style.zIndex = '300'
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19,
+        subdomains: 'abcd',
+        opacity: 0.48,   // 衛星のテクスチャを残しつつ水域・緑を発色
+        pane: 'naturalPane',
+      }).addTo(map)
+
+      // 3. ラベルペイン — 地名・道路名をクリアに
       map.createPane('labelPane')
       const labelPaneEl = map.getPane('labelPane')!
       labelPaneEl.style.zIndex = '450'
 
-      // 地名・道路ラベルを衛星写真の上に重ねる
       L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
         attribution: '',
         maxZoom: 19,
-        opacity: 0.85,
+        opacity: 0.75,
         pane: 'labelPane',
       }).addTo(map)
 
@@ -191,24 +203,24 @@ export default function MapView({
 
         const marker = L.marker([photo.lat, photo.lng], { icon })
 
+        // popup — ファイル名なし、日付・レイヤ・コメントのみ
+        const desc = photo.description
+          ? `<p style="font-size:11px;color:rgba(255,255,255,0.45);margin:4px 0 0;line-height:1.4;">${photo.description}</p>`
+          : ''
         marker.bindPopup(`
-          <div style="width:220px;overflow:hidden;border-radius:12px;background:#13131f;">
-            <div style="position:relative;">
-              <img src="${imgUrl}" alt="" style="width:100%;height:140px;object-fit:cover;display:block;cursor:pointer;"
-                onclick="window.__pryPhotoClick&&window.__pryPhotoClick('${photo.id}')"/>
-            </div>
-            <div style="padding:10px 12px;">
-              <p style="font-size:13px;font-weight:600;color:white;margin:0 0 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                ${photo.title || photo.filename}
-              </p>
-              ${takenDate ? `<p style="font-size:11px;color:rgba(255,255,255,0.4);margin:0 0 2px;">${takenDate}</p>` : ''}
-              <p style="font-size:11px;color:rgba(255,255,255,0.3);margin:0;">
-                <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:4px;vertical-align:middle;"></span>
-                ${photo.layer?.name || ''}
-              </p>
+          <div style="width:210px;overflow:hidden;border-radius:12px;background:#13131f;cursor:pointer;"
+            onclick="window.__pryPhotoClick&&window.__pryPhotoClick('${photo.id}')">
+            <img src="${imgUrl}" alt="" style="width:100%;height:130px;object-fit:cover;display:block;"/>
+            <div style="padding:9px 11px 11px;">
+              <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
+                <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+                <span style="font-size:11px;color:rgba(255,255,255,0.35);">${photo.layer?.name || ''}</span>
+                ${takenDate ? `<span style="font-size:11px;color:rgba(255,255,255,0.25);margin-left:auto;">${takenDate}</span>` : ''}
+              </div>
+              ${desc}
             </div>
           </div>
-        `, { maxWidth: 240, minWidth: 220 })
+        `, { maxWidth: 230, minWidth: 210, className: 'pry-popup' })
 
         marker.addTo(map)
         markersRef.current[photo.id] = marker
