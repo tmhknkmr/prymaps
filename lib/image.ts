@@ -12,13 +12,12 @@ export interface ExifData {
 export async function extractExif(file: File): Promise<ExifData> {
   try {
     const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 3000))
+    // pickを使わずブロック単位で有効化（pickはgpsブロックより優先されGPSを読まない場合がある）
     const parse = exifr.parse(file, {
       gps: true,
-      pick: [
-        'GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef',
-        'DateTimeOriginal', 'CreateDate',
-        'Make', 'Model',
-      ],
+      tiff: true,   // Make, Model
+      ifd0: true,   // Make, Model
+      exif: true,   // DateTimeOriginal
     })
     const data = await Promise.race([parse, timeout])
 
