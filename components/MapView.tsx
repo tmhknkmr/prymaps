@@ -73,8 +73,9 @@ export default function MapView({
       map.createPane('satellitePane')
       const satPaneEl = map.getPane('satellitePane')!
       satPaneEl.style.zIndex = '200'
-      // contrast を極限まで下げて輝度を均一化し、タイル境界の2色問題を解消
-      satPaneEl.style.filter = 'grayscale(1) brightness(1.9) contrast(0.28)'
+      // brightness を極大にして全ピクセルを白付近にクリッピング
+      // → タイルごとの輝度差が消え multiply で色が均一に乗る（漂白感も復活）
+      satPaneEl.style.filter = 'grayscale(1) brightness(2.6) contrast(0.55)'
 
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles © Esri',
@@ -88,8 +89,9 @@ export default function MapView({
       naturalPaneEl.style.zIndex = '300'
       // multiply: 白いベースに色が均一に染み込む → タイル境界に依存しない発色
       naturalPaneEl.style.mixBlendMode = 'multiply'
-      // multiply向け: 明るくして白に近づけると色が薄くなりすぎるので彩度・コントラスト高め
-      naturalPaneEl.style.filter = 'saturate(8) brightness(0.55) contrast(1.5)'
+      // ベースが白に近いので multiply でも発色するよう彩度・コントラスト高め
+      // brightness は上げすぎると白飛びするので 0.75 で抑制
+      naturalPaneEl.style.filter = 'saturate(7) brightness(0.75) contrast(1.6)'
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
