@@ -57,13 +57,17 @@ export default function PhotoUploadModal({
 
     // EXIFから座標・日時・カメラ情報を取得
     const exif = await extractExif(arr[0])
-    if (exif.lat !== null && exif.lng !== null) {
+
+    // 座標: defaultPin（「この場所に投稿」等で明示指定）がなければEXIFを使う
+    if (exif.lat !== null && exif.lng !== null && !defaultPin) {
       setLat(exif.lat.toFixed(7))
       setLng(exif.lng.toFixed(7))
       setGpsDetected(true)
       onPinChange?.(exif.lat, exif.lng)
-      onGpsDetected?.(exif.lat, exif.lng)  // 地図をその場所に移動
+      onGpsDetected?.(exif.lat, exif.lng)
     }
+
+    // 日時・カメラ情報はEXIF優先（場所とは独立）
     if (exif.takenAt) {
       const d = exif.takenAt
       const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
@@ -71,7 +75,7 @@ export default function PhotoUploadModal({
     }
     if (exif.cameraMake) setCameraMake(exif.cameraMake)
     if (exif.cameraModel) setCameraModel(exif.cameraModel)
-  }, [onPinChange, onGpsDetected])
+  }, [onPinChange, onGpsDetected, defaultPin])
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
