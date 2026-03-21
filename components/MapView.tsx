@@ -71,36 +71,48 @@ export default function MapView({
       })
 
       // ── レイヤ構成（下から順） ──────────────────────────────────────
-      // 1. 衛星写真ベース (Esri World Imagery)
-      L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        {
-          attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-          maxZoom: 19,
-        }
-      ).addTo(map)
+      // 1. CartoDB Positron ベース — 水域・緑地の色を均一に定義する唯一の色源
+      //    タイル差がなく、水は必ず同じ青、緑地は同じ緑になる
+      map.createPane('cartoPane')
+      const cartoPaneEl = map.getPane('cartoPane')!
+      cartoPaneEl.style.zIndex = '200'
+      // 彩度を上げて水・緑をくっきり、明度は控えめに（漂白しすぎない）
+      cartoPaneEl.style.filter = 'saturate(3.5) brightness(0.95) contrast(1.05)'
 
-      // 2. 交通・道路レイヤ (Esri Reference/World_Transportation)
-      //    衛星上に道路・鉄道路線を重ねる専用タイル（透明背景）
-      map.createPane('transportPane')
-      const transportPaneEl = map.getPane('transportPane')!
-      transportPaneEl.style.zIndex = '300'
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19,
+        subdomains: 'abcd',
+        pane: 'cartoPane',
+      }).addTo(map)
 
-      L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
-        { maxZoom: 19, opacity: 0.8, pane: 'transportPane' }
-      ).addTo(map)
+      // 2. 衛星テクスチャペイン — グレースケール低opacityで建物・地形を重ねる
+      //    色情報は持たず、テクスチャのみ提供 → タイル色差が地図の色に影響しない
+      map.createPane('satellitePane')
+      const satPaneEl = map.getPane('satellitePane')!
+      satPaneEl.style.zIndex = '300'
+      // grayscale化し、輝度・コントラストを整えてからopacity 0.38 で薄く重ねる
+      satPaneEl.style.filter = 'grayscale(1) brightness(1.18) contrast(0.82)'
 
-      // 3. 地名・POIレイヤ (Esri Reference/World_Boundaries_and_Places)
-      //    駅名・施設名・行政区域を透明背景で重ねる
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri',
+        maxZoom: 19,
+        opacity: 0.38,
+        pane: 'satellitePane',
+      }).addTo(map)
+
+      // 3. ラベルペイン — テキストのみ（背景透明・着色なし）
       map.createPane('labelPane')
       const labelPaneEl = map.getPane('labelPane')!
-      labelPaneEl.style.zIndex = '400'
+      labelPaneEl.style.zIndex = '450'
 
-      L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-        { maxZoom: 19, opacity: 0.9, pane: 'labelPane' }
-      ).addTo(map)
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19,
+        subdomains: 'abcd',
+        opacity: 0.85,
+        pane: 'labelPane',
+      }).addTo(map)
 
       L.control.zoom({ position: 'bottomright' }).addTo(map)
 
