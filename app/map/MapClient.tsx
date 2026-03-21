@@ -318,6 +318,18 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
     </div>
   )
 
+  // 既存ピンからの「この場所に投稿」
+  const handlePostAtLocation = useCallback((lat: number, lng: number) => {
+    if (layers.length === 0) {
+      alert('まずレイヤを作成してください')
+      setActivePanel('layers')
+      return
+    }
+    setPendingPin({ lat, lng })
+    setPendingFiles([])
+    setShowUpload(true)
+  }, [layers])
+
   // FABクリックハンドラ
   const handleFabClick = () => {
     if (pinMode) { setPinModeSync(false); setPendingFiles([]); return }
@@ -337,6 +349,7 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
         <MapView
           photos={displayedPhotos}
           onMapClick={handleMapClick}
+          onPostAtLocation={handlePostAtLocation}
           onPhotoClick={setSelectedPhoto}
           center={mapSettings ? [mapSettings.center_lat, mapSettings.center_lng] : (geoCenter ?? [35.6812, 139.7671])}
           zoom={mapSettings?.zoom || 12}

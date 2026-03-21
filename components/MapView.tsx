@@ -14,6 +14,7 @@ interface MapViewProps {
   photos: PhotoWithMeta[]
   onMapClick?: (lat: number, lng: number) => void
   onPhotoClick?: (photo: PhotoWithMeta) => void
+  onPostAtLocation?: (lat: number, lng: number) => void
   center?: [number, number]
   zoom?: number
   onMoveEnd?: (lat: number, lng: number, zoom: number) => void
@@ -27,6 +28,7 @@ export default function MapView({
   photos,
   onMapClick,
   onPhotoClick,
+  onPostAtLocation,
   center = [35.6812, 139.7671],
   zoom = 12,
   onMoveEnd,
@@ -213,16 +215,30 @@ export default function MapView({
           ? `<p style="font-size:11px;color:rgba(255,255,255,0.45);margin:4px 0 0;line-height:1.4;">${photo.description}</p>`
           : ''
         marker.bindPopup(`
-          <div style="width:210px;overflow:hidden;border-radius:12px;background:#13131f;cursor:pointer;"
-            onclick="window.__pryPhotoClick&&window.__pryPhotoClick('${photo.id}')">
-            <img src="${imgUrl}" alt="" style="width:100%;height:130px;object-fit:cover;display:block;"/>
-            <div style="padding:9px 11px 11px;">
+          <div style="width:210px;overflow:hidden;border-radius:12px;background:#13131f;">
+            <img src="${imgUrl}" alt="" style="width:100%;height:130px;object-fit:cover;display:block;cursor:pointer;"
+              onclick="window.__pryPhotoClick&&window.__pryPhotoClick('${photo.id}')"/>
+            <div style="padding:9px 11px 10px;">
               <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">
                 <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;"></span>
                 <span style="font-size:11px;color:rgba(255,255,255,0.35);">${photo.layer?.name || ''}</span>
                 ${takenDate ? `<span style="font-size:11px;color:rgba(255,255,255,0.25);margin-left:auto;">${takenDate}</span>` : ''}
               </div>
               ${desc}
+              <button
+                onclick="event.stopPropagation();window.__pryPostAt&&window.__pryPostAt(${photo.lat},${photo.lng})"
+                style="
+                  margin-top:8px;width:100%;padding:5px 0;
+                  background:rgba(255,255,255,0.06);
+                  border:1px solid rgba(255,255,255,0.1);
+                  border-radius:6px;
+                  font-size:11px;color:rgba(255,255,255,0.5);
+                  cursor:pointer;letter-spacing:0.02em;
+                  transition:background 0.15s;
+                "
+                onmouseover="this.style.background='rgba(255,255,255,0.11)'"
+                onmouseout="this.style.background='rgba(255,255,255,0.06)'"
+              >＋ この場所に投稿</button>
             </div>
           </div>
         `, { maxWidth: 230, minWidth: 210, className: 'pry-popup' })
@@ -235,6 +251,9 @@ export default function MapView({
     ;(window as unknown as Record<string, unknown>).__pryPhotoClick = (id: string) => {
       const photo = photos.find(p => p.id === id)
       if (photo && onPhotoClick) onPhotoClick(photo)
+    }
+    ;(window as unknown as Record<string, unknown>).__pryPostAt = (lat: number, lng: number) => {
+      onPostAtLocation?.(lat, lng)
     }
 
     updateMarkers().catch(console.error)
