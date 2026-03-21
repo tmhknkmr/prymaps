@@ -73,8 +73,8 @@ export default function MapView({
       map.createPane('satellitePane')
       const satPaneEl = map.getPane('satellitePane')!
       satPaneEl.style.zIndex = '200'
-      // grayscale → brightness高め・contrast低め → 白く抜けた表現
-      satPaneEl.style.filter = 'grayscale(1) brightness(1.55) contrast(0.52)'
+      // contrast を極限まで下げて輝度を均一化し、タイル境界の2色問題を解消
+      satPaneEl.style.filter = 'grayscale(1) brightness(1.9) contrast(0.28)'
 
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles © Esri',
@@ -86,11 +86,10 @@ export default function MapView({
       map.createPane('naturalPane')
       const naturalPaneEl = map.getPane('naturalPane')!
       naturalPaneEl.style.zIndex = '300'
-      // screen: 暗い部分が色として浮かび上がる → 水域・緑が明るくポップに発色
-      // CartoDB を暗め(brightness 0.4)にしてからスクリーンすると色が鮮やかに乗る
-      // screen × 彩度強化で水域・緑地を爽やかに発色
-      naturalPaneEl.style.mixBlendMode = 'screen'
-      naturalPaneEl.style.filter = 'saturate(10) brightness(0.32) contrast(1.8)'
+      // multiply: 白いベースに色が均一に染み込む → タイル境界に依存しない発色
+      naturalPaneEl.style.mixBlendMode = 'multiply'
+      // multiply向け: 明るくして白に近づけると色が薄くなりすぎるので彩度・コントラスト高め
+      naturalPaneEl.style.filter = 'saturate(8) brightness(0.55) contrast(1.5)'
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
