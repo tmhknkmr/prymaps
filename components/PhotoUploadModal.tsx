@@ -79,7 +79,13 @@ export default function PhotoUploadModal({
         const compressed = await compressToWebP(file)
         const dims = await getImageDimensions(compressed)
 
-        const path = `${userId}/${layerId}/${Date.now()}_${compressed.name}`
+        // 日本語・スペース・特殊文字を除去してASCIIのみのファイル名にする
+        const safeName = compressed.name
+          .replace(/[^\x00-\x7F]/g, '')   // 非ASCII除去
+          .replace(/\s+/g, '_')            // スペース→アンダースコア
+          .replace(/[^a-zA-Z0-9._-]/g, '') // 記号除去
+          || 'photo.webp'                  // 空になった場合のフォールバック
+        const path = `${userId}/${layerId}/${Date.now()}_${safeName}`
         const { error: uploadErr } = await supabase.storage
           .from('photos')
           .upload(path, compressed, { contentType: 'image/webp', upsert: false })
