@@ -20,6 +20,9 @@ export async function extractExif(file: File): Promise<ExifData> {
     } as Parameters<typeof exifr.parse>[1])
     const data = await Promise.race([parse, timeout])
 
+    // デバッグ: ブラウザのコンソールで確認
+    console.log('[PRY EXIF] raw data:', data)
+
     if (!data) return { lat: null, lng: null, takenAt: null, cameraMake: null, cameraModel: null }
 
     let lat: number | null = null
