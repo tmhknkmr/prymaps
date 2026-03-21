@@ -562,6 +562,10 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
             await fetchPhotos()
           }}
           onPinChange={(lat, lng) => setPendingPin({ lat, lng })}
+          onGpsDetected={(lat, lng) => {
+            setPendingPin({ lat, lng })
+            setFlyToTarget({ lat, lng, zoom: 15 })
+          }}
         />
       )}
 

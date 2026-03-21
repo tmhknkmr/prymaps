@@ -13,6 +13,7 @@ interface Props {
   onClose: () => void
   onSuccess: () => void
   onPinChange?: (lat: number, lng: number) => void
+  onGpsDetected?: (lat: number, lng: number) => void  // GPS自動検出時に地図を移動
   initialFiles?: File[]   // 「写真を先に選ぶ」フロー用
 }
 
@@ -23,6 +24,7 @@ export default function PhotoUploadModal({
   onClose,
   onSuccess,
   onPinChange,
+  onGpsDetected,
   initialFiles,
 }: Props) {
   const [files, setFiles] = useState<File[]>([])
@@ -34,6 +36,9 @@ export default function PhotoUploadModal({
   const [lat, setLat] = useState<string>(defaultPin?.lat?.toString() || '')
   const [lng, setLng] = useState<string>(defaultPin?.lng?.toString() || '')
   const [takenAt, setTakenAt] = useState('')
+  const [cameraMake, setCameraMake] = useState('')
+  const [cameraModel, setCameraModel] = useState('')
+  const [gpsDetected, setGpsDetected] = useState(false)
   const [isPublic, setIsPublic] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,20 +53,25 @@ export default function PhotoUploadModal({
     setFiles(arr)
     setPreviews(arr.map(f => URL.createObjectURL(f)))
     setCurrentIdx(0)
+    setGpsDetected(false)
 
-    // Extract EXIF from first file
+    // EXIFから座標・日時・カメラ情報を取得
     const exif = await extractExif(arr[0])
     if (exif.lat !== null && exif.lng !== null) {
       setLat(exif.lat.toFixed(7))
       setLng(exif.lng.toFixed(7))
+      setGpsDetected(true)
       onPinChange?.(exif.lat, exif.lng)
+      onGpsDetected?.(exif.lat, exif.lng)  // 地図をその場所に移動
     }
     if (exif.takenAt) {
       const d = exif.takenAt
       const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
       setTakenAt(local.toISOString().slice(0, 16))
     }
-  }, [onPinChange])
+    if (exif.cameraMake) setCameraMake(exif.cameraMake)
+    if (exif.cameraModel) setCameraModel(exif.cameraModel)
+  }, [onPinChange, onGpsDetected])
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -111,6 +121,8 @@ export default function PhotoUploadModal({
           width: dims.width,
           height: dims.height,
           file_size: compressed.size,
+          camera_make: cameraMake || null,
+          camera_model: cameraModel || null,
         })
 
         if (dbErr) throw dbErr
@@ -226,7 +238,15 @@ export default function PhotoUploadModal({
 
               {/* Location */}
               <div className="space-y-1.5">
-                <label className="text-xs text-white/50">位置情報</label>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-white/50">位置情報</label>
+                  {gpsDetected && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={{ background: 'rgba(99,102,241,0.18)', color: '#a5b4fc' }}>
+                      📍 撮影地点を自動検出
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="number"
@@ -254,6 +274,27 @@ export default function PhotoUploadModal({
                   />
                 </div>
                 <p className="text-white/30 text-xs">地図をクリックして位置を指定できます</p>
+              </div>
+
+              {/* Camera */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-white/50">カメラ（任意）</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={cameraMake}
+                    onChange={e => setCameraMake(e.target.value)}
+                    placeholder="メーカー例: Apple"
+                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-white/30 transition"
+                  />
+                  <input
+                    type="text"
+                    value={cameraModel}
+                    onChange={e => setCameraModel(e.target.value)}
+                    placeholder="機種例: iPhone 15 Pro"
+                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-white/30 transition"
+                  />
+                </div>
               </div>
 
               {/* Taken at */}

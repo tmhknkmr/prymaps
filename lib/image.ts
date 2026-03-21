@@ -5,6 +5,8 @@ export interface ExifData {
   lat: number | null
   lng: number | null
   takenAt: Date | null
+  cameraMake: string | null
+  cameraModel: string | null
 }
 
 export async function extractExif(file: File): Promise<ExifData> {
@@ -12,11 +14,15 @@ export async function extractExif(file: File): Promise<ExifData> {
     const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 3000))
     const parse = exifr.parse(file, {
       gps: true,
-      pick: ['GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef', 'DateTimeOriginal', 'CreateDate'],
+      pick: [
+        'GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef',
+        'DateTimeOriginal', 'CreateDate',
+        'Make', 'Model',
+      ],
     })
     const data = await Promise.race([parse, timeout])
 
-    if (!data) return { lat: null, lng: null, takenAt: null }
+    if (!data) return { lat: null, lng: null, takenAt: null, cameraMake: null, cameraModel: null }
 
     let lat: number | null = null
     let lng: number | null = null
@@ -33,9 +39,16 @@ export async function extractExif(file: File): Promise<ExifData> {
       if (isNaN(takenAt.getTime())) takenAt = null
     }
 
-    return { lat, lng, takenAt }
+    const cameraMake: string | null = data.Make?.trim() || null
+    // Make名がModel名の先頭に重複して含まれる場合は除去（例: "Apple iPhone 15" → "iPhone 15"）
+    let cameraModel: string | null = data.Model?.trim() || null
+    if (cameraMake && cameraModel && cameraModel.toLowerCase().startsWith(cameraMake.toLowerCase())) {
+      cameraModel = cameraModel.slice(cameraMake.length).trim() || cameraModel
+    }
+
+    return { lat, lng, takenAt, cameraMake, cameraModel }
   } catch {
-    return { lat: null, lng: null, takenAt: null }
+    return { lat: null, lng: null, takenAt: null, cameraMake: null, cameraModel: null }
   }
 }
 
