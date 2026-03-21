@@ -281,16 +281,18 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
 
   // パネルコンテンツ（デスクトップサイドバー・モバイルシート共用）
   const panelContent = (
-    <div className="flex-1 overflow-y-auto p-4">
-      {activePanel === 'layers' && archive && (
-        <LayerPanel
-          layers={layers}
-          archiveId={archive.id}
-          userId={userId}
-          onLayersChange={fetchLayers}
-          visibleLayerIds={visibleLayerIds}
-          onToggleLayer={handleToggleLayer}
-        />
+    <div className="p-4">
+      {activePanel === 'layers' && (
+        archive
+          ? <LayerPanel
+              layers={layers}
+              archiveId={archive.id}
+              userId={userId}
+              onLayersChange={fetchLayers}
+              visibleLayerIds={visibleLayerIds}
+              onToggleLayer={handleToggleLayer}
+            />
+          : <p className="text-white/30 text-xs">アーカイブを読み込み中...</p>
       )}
       {activePanel === 'discover' && (
         <PublicUsersPanel
@@ -485,9 +487,21 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           モバイル: ボトムシート（パネル内容）
       ══════════════════════════════════════ */}
       <div
-        className={`md:hidden fixed left-0 right-0 z-40 transition-transform duration-300 ease-out ${activePanel ? 'translate-y-0' : 'translate-y-full'}`}
-        style={{ bottom: '56px', maxHeight: '60vh', background: 'rgba(12,12,20,0.98)', borderTop: '1px solid rgba(255,255,255,0.1)', overflowY: 'auto' }}
+        className={`md:hidden fixed left-0 right-0 transition-transform duration-300 ease-out ${activePanel ? 'translate-y-0' : 'translate-y-full'}`}
+        style={{
+          bottom: '56px',
+          maxHeight: '65vh',
+          minHeight: '200px',
+          background: 'rgba(10,10,18,0.98)',
+          borderTop: '1px solid rgba(255,255,255,0.12)',
+          overflowY: 'auto',
+          zIndex: 2000,   // Leaflet(1000)・FAB(1000)より確実に上
+        }}
       >
+        {/* ドラッグハンドル */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-white/20" />
+        </div>
         {panelContent}
       </div>
 
@@ -495,8 +509,8 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           モバイル: ボトムナビゲーションバー
       ══════════════════════════════════════ */}
       <div
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center"
-        style={{ height: '56px', background: 'rgba(10,10,18,0.97)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingBottom: 'env(safe-area-inset-bottom)', paddingLeft: '16px', paddingRight: '16px' }}
+        className="md:hidden fixed bottom-0 left-0 right-0 flex items-center"
+        style={{ height: '56px', background: 'rgba(10,10,18,0.97)', borderTop: '1px solid rgba(255,255,255,0.08)', paddingBottom: 'env(safe-area-inset-bottom)', paddingLeft: '16px', paddingRight: '16px', zIndex: 2001 }}
       >
         {/* ロゴ */}
         <h1 className="text-base font-black mr-4 flex-shrink-0" style={{ letterSpacing: '-0.04em' }}>PRY</h1>
