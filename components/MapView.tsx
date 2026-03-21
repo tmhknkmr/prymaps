@@ -68,17 +68,31 @@ export default function MapView({
         zoomControl: false,
       })
 
+      // 衛星写真専用ペイン — フィルターをラベルと分離するため
+      map.createPane('satellitePane')
+      const satPaneEl = map.getPane('satellitePane')!
+      satPaneEl.style.zIndex = '200'
+      // 彩度を抑え・明度を上げて「透明感ある航空写真」に
+      satPaneEl.style.filter = 'saturate(0.55) brightness(1.22) contrast(0.92)'
+
       // Esri World Imagery — 高品質衛星写真（完全無料・APIキー不要）
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles © Esri — Source: Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN',
+        attribution: 'Tiles © Esri — Source: Esri, Maxar, GeoEye, Earthstar Geographics',
         maxZoom: 19,
+        pane: 'satellitePane',
       }).addTo(map)
 
-      // 地名・道路ラベルを衛星写真の上に重ねる（Esri Reference Overlay）
+      // ラベルペイン — フィルターなしでクリアに表示
+      map.createPane('labelPane')
+      const labelPaneEl = map.getPane('labelPane')!
+      labelPaneEl.style.zIndex = '450'
+
+      // 地名・道路ラベルを衛星写真の上に重ねる
       L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
         attribution: '',
         maxZoom: 19,
-        opacity: 0.8,
+        opacity: 0.85,
+        pane: 'labelPane',
       }).addTo(map)
 
       L.control.zoom({ position: 'bottomright' }).addTo(map)

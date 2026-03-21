@@ -234,10 +234,8 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
     setSearching(true)
     setShowResults(false)
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=6&accept-language=ja`,
-        { headers: { 'User-Agent': 'PRY/1.0 (prymaps.com)' } }
-      )
+      // サーバーサイドAPIルート経由（Nominatimへの直接fetchはブラウザでUser-Agent不可）
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(searchQuery)}`)
       const data: NominatimResult[] = await res.json()
       setSearchResults(data)
       setShowResults(true)
