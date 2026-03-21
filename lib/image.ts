@@ -15,10 +15,9 @@ export async function extractExif(file: File): Promise<ExifData> {
     // pickを使わずブロック単位で有効化（pickはgpsブロックより優先されGPSを読まない場合がある）
     const parse = exifr.parse(file, {
       gps: true,
-      tiff: true,   // Make, Model
-      ifd0: true,   // Make, Model
-      exif: true,   // DateTimeOriginal
-    })
+      tiff: true,
+      exif: true,
+    } as Parameters<typeof exifr.parse>[1])
     const data = await Promise.race([parse, timeout])
 
     if (!data) return { lat: null, lng: null, takenAt: null, cameraMake: null, cameraModel: null }
