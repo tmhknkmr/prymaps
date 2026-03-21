@@ -100,15 +100,17 @@ export default function MapView({
         pane: 'naturalPane',
       }).addTo(map)
 
-      // 3. ラベルペイン — 地名・道路名をクリアに
+      // 3. ラベルペイン — テキストのみ（背景透明・着色なし）
       map.createPane('labelPane')
       const labelPaneEl = map.getPane('labelPane')!
       labelPaneEl.style.zIndex = '450'
 
-      L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-        attribution: '',
+      // CartoDB light_only_labels: 文字だけのレイヤ、水域・陸地への着色なし
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19,
-        opacity: 0.75,
+        subdomains: 'abcd',
+        opacity: 0.8,
         pane: 'labelPane',
       }).addTo(map)
 
