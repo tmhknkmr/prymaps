@@ -106,11 +106,12 @@ export default function MapView({
       const labelPaneEl = map.getPane('labelPane')!
       labelPaneEl.style.zIndex = '450'
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+      // Voyager labels: 駅・地下鉄・バス停アイコンを含む交通系POI対応
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19,
         subdomains: 'abcd',
-        opacity: 0.85,
+        opacity: 0.9,
         pane: 'labelPane',
       }).addTo(map)
 
