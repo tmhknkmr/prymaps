@@ -50,6 +50,11 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
   const [exporting, setExporting] = useState(false)
   const [geoCenter, setGeoCenter] = useState<[number, number] | null>(null)
 
+  // 「写真を先に選ぶ」フロー
+  const [showFlowMenu, setShowFlowMenu] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])  // 先行選択ファイル
+  const photoFirstInputRef = useRef<HTMLInputElement>(null)
+
   // 場所検索
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<NominatimResult[]>([])
@@ -164,6 +169,7 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
     if (pinModeRef.current) {
       setPinModeSync(false)
       setPendingPin({ lat, lng })
+      // pendingFiles があれば「写真先行フロー」、なければ「位置先行フロー」
       setTimeout(() => setShowUpload(true), 0)
     }
   }, [setPinModeSync])
@@ -226,6 +232,16 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
     await supabase.auth.signOut()
     window.location.href = '/'
   }
+
+  // 「写真を先に選ぶ」フロー — ファイル選択後にピンモードへ
+  const handlePhotoFirstSelect = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    const arr = Array.from(files).filter(f => f.type.startsWith('image/'))
+    if (arr.length === 0) return
+    setPendingFiles(arr)
+    setShowFlowMenu(false)
+    setPinModeSync(true)   // ファイル選択後にピンモードへ
+  }, [setPinModeSync])
 
   // 場所検索（Nominatim / OSM）
   const handleSearch = async (e: React.FormEvent) => {
@@ -357,15 +373,30 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           )}
         </div>
 
-        {/* 写真を置くボタン */}
+        {/* 写真先行フロー用の隠しファイル入力 */}
+        <input
+          ref={photoFirstInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={e => handlePhotoFirstSelect(e.target.files)}
+        />
+
+        {/* 写真を置くボタン（ピンモード中はキャンセルに変化） */}
         <button
           onClick={() => {
+            if (pinMode) {
+              setPinModeSync(false)
+              setPendingFiles([])
+              return
+            }
             if (layers.length === 0) {
               alert('まずレイヤを作成してください')
               setActivePanel('layers')
               return
             }
-            setPinModeSync(!pinMode)
+            setShowFlowMenu(v => !v)
           }}
           className="absolute top-5 right-5 flex items-center gap-2 rounded-xl font-medium text-sm transition"
           style={{
@@ -380,6 +411,42 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           {pinMode ? '✕ キャンセル' : '＋ 写真を置く'}
         </button>
 
+        {/* フロー選択メニュー */}
+        {showFlowMenu && !pinMode && (
+          <div
+            className="absolute top-16 right-5 rounded-2xl overflow-hidden"
+            style={{
+              zIndex: 1000,
+              background: 'rgba(17,17,24,0.97)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+              minWidth: '220px',
+            }}
+          >
+            <button
+              onClick={() => {
+                setShowFlowMenu(false)
+                setPendingFiles([])
+                setPinModeSync(true)
+              }}
+              className="w-full text-left px-5 py-4 text-sm text-white/80 hover:bg-white/5 transition border-b border-white/8"
+            >
+              <p className="font-medium">📍 位置を指定してから選ぶ</p>
+              <p className="text-white/35 text-xs mt-0.5">地図をタップ → 写真を選択</p>
+            </button>
+            <button
+              onClick={() => {
+                setShowFlowMenu(false)
+                photoFirstInputRef.current?.click()
+              }}
+              className="w-full text-left px-5 py-4 text-sm text-white/80 hover:bg-white/5 transition"
+            >
+              <p className="font-medium">🖼 写真を先に選ぶ</p>
+              <p className="text-white/35 text-xs mt-0.5">写真を選択 → 地図に置く</p>
+            </button>
+          </div>
+        )}
+
         {/* ピンモード中の案内 */}
         {pinMode && (
           <div
@@ -390,7 +457,9 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
               className="text-white text-sm px-6 py-3 rounded-full"
               style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)' }}
             >
-              写真を置きたい場所をクリック
+              {pendingFiles.length > 0
+                ? `📷 ${pendingFiles.length}枚を置く場所をクリック`
+                : '写真を置きたい場所をクリック'}
             </div>
           </div>
         )}
@@ -499,10 +568,12 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           layers={layers}
           defaultPin={pendingPin}
           userId={userId}
-          onClose={() => { setShowUpload(false); setPendingPin(null) }}
+          initialFiles={pendingFiles.length > 0 ? pendingFiles : undefined}
+          onClose={() => { setShowUpload(false); setPendingPin(null); setPendingFiles([]) }}
           onSuccess={async () => {
             setShowUpload(false)
             setPendingPin(null)
+            setPendingFiles([])
             await fetchLayers()
             await fetchPhotos()
           }}

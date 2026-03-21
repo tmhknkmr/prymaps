@@ -72,8 +72,8 @@ export default function MapView({
       map.createPane('satellitePane')
       const satPaneEl = map.getPane('satellitePane')!
       satPaneEl.style.zIndex = '200'
-      // 彩度を抑え・明度を上げて「透明感ある航空写真」に
-      satPaneEl.style.filter = 'saturate(0.55) brightness(1.22) contrast(0.92)'
+      // 明度150%・コントラスト60% — 写真が浮かぶ透明感ある航空写真
+      satPaneEl.style.filter = 'brightness(1.5) contrast(0.6)'
 
       // Esri World Imagery — 高品質衛星写真（完全無料・APIキー不要）
       L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {

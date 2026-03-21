@@ -13,6 +13,7 @@ interface Props {
   onClose: () => void
   onSuccess: () => void
   onPinChange?: (lat: number, lng: number) => void
+  initialFiles?: File[]   // 「写真を先に選ぶ」フロー用
 }
 
 export default function PhotoUploadModal({
@@ -22,6 +23,7 @@ export default function PhotoUploadModal({
   onClose,
   onSuccess,
   onPinChange,
+  initialFiles,
 }: Props) {
   const [files, setFiles] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
@@ -122,6 +124,14 @@ export default function PhotoUploadModal({
       setUploading(false)
     }
   }
+
+  // 「写真を先に選ぶ」フローで渡されたファイルを初期ロード
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      handleFiles(initialFiles)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
