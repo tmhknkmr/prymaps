@@ -101,17 +101,20 @@ export default function MapView({
         pane: 'satellitePane',
       }).addTo(map)
 
-      // 3. ラベルペイン — テキストのみ（背景透明・着色なし）
+      // 3. Voyager フルタイル（低opacity）— 駅・地下鉄・バス停アイコンを確実に表示
+      //    only_labels では交通系 POI アイコンが含まれないため、フルタイルを薄く重ねる
+      //    水域・緑地の色はベースの Positron が担うため、視覚的な干渉は最小限
       map.createPane('labelPane')
       const labelPaneEl = map.getPane('labelPane')!
       labelPaneEl.style.zIndex = '450'
+      // 明度を抑えてラベル・アイコンのみ視認できる濃さに調整
+      labelPaneEl.style.filter = 'brightness(0.82) contrast(1.15)'
 
-      // Voyager labels: 駅・地下鉄・バス停アイコンを含む交通系POI対応
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', {
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19,
         subdomains: 'abcd',
-        opacity: 0.9,
+        opacity: 0.55,
         pane: 'labelPane',
       }).addTo(map)
 
