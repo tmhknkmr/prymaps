@@ -21,7 +21,7 @@ export async function extractExif(file: File): Promise<ExifData> {
     const data = await Promise.race([parse, timeout])
 
     // デバッグ: ブラウザのコンソールで確認
-    console.log('[PRY EXIF] raw data:', data)
+    console.log('[PRY EXIF] raw data:', JSON.stringify(data))
 
     if (!data) return { lat: null, lng: null, takenAt: null, cameraMake: null, cameraModel: null }
 
@@ -29,10 +29,21 @@ export async function extractExif(file: File): Promise<ExifData> {
     let lng: number | null = null
     let takenAt: Date | null = null
 
-    if (data.latitude !== undefined && data.longitude !== undefined) {
+    // パターンA: gps:true で計算済みの decimal degrees
+    if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
       lat = data.latitude
       lng = data.longitude
     }
+    // パターンB: 生の GPS 配列 [度, 分, 秒]
+    else if (Array.isArray(data.GPSLatitude) && Array.isArray(data.GPSLongitude)) {
+      const toDeg = ([d, m, s]: number[]) => d + m / 60 + (s || 0) / 3600
+      const latVal = toDeg(data.GPSLatitude)
+      const lngVal = toDeg(data.GPSLongitude)
+      lat = (data.GPSLatitudeRef === 'S') ? -latVal : latVal
+      lng = (data.GPSLongitudeRef === 'W') ? -lngVal : lngVal
+    }
+
+    console.log('[PRY EXIF] resolved lat/lng:', lat, lng)
 
     const dateStr = data.DateTimeOriginal || data.CreateDate
     if (dateStr) {
