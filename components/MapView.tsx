@@ -69,36 +69,34 @@ export default function MapView({
       })
 
       // ── レイヤ構成（下から順） ──────────────────────────────────────
-      // 1. 衛星写真ペイン — モノクロ漂白処理
-      map.createPane('satellitePane')
-      const satPaneEl = map.getPane('satellitePane')!
-      satPaneEl.style.zIndex = '200'
-      // brightness を極大にして全ピクセルを白付近にクリッピング
-      // → タイルごとの輝度差が消え multiply で色が均一に乗る（漂白感も復活）
-      satPaneEl.style.filter = 'grayscale(1) brightness(2.6) contrast(0.55)'
-
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles © Esri',
-        maxZoom: 19,
-        pane: 'satellitePane',
-      }).addTo(map)
-
-      // 2. 自然要素オーバーレイペイン — CartoDB Positron で水域・緑を色付け
-      map.createPane('naturalPane')
-      const naturalPaneEl = map.getPane('naturalPane')!
-      naturalPaneEl.style.zIndex = '300'
-      // multiply: 白いベースに色が均一に染み込む → タイル境界に依存しない発色
-      naturalPaneEl.style.mixBlendMode = 'multiply'
-      // ベースが白に近いので multiply でも発色するよう彩度・コントラスト高め
-      // brightness は上げすぎると白飛びするので 0.75 で抑制
-      naturalPaneEl.style.filter = 'saturate(7) brightness(0.75) contrast(1.6)'
+      // 1. CartoDB Positron ベース — 水域・緑地の色を均一に定義する唯一の色源
+      //    タイル差がなく、水は必ず同じ青、緑地は同じ緑になる
+      map.createPane('cartoPane')
+      const cartoPaneEl = map.getPane('cartoPane')!
+      cartoPaneEl.style.zIndex = '200'
+      // 彩度を上げて水・緑をくっきり、明度は控えめに（漂白しすぎない）
+      cartoPaneEl.style.filter = 'saturate(3.5) brightness(0.95) contrast(1.05)'
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19,
         subdomains: 'abcd',
-        opacity: 1.0,
-        pane: 'naturalPane',
+        pane: 'cartoPane',
+      }).addTo(map)
+
+      // 2. 衛星テクスチャペイン — グレースケール低opacityで建物・地形を重ねる
+      //    色情報は持たず、テクスチャのみ提供 → タイル色差が地図の色に影響しない
+      map.createPane('satellitePane')
+      const satPaneEl = map.getPane('satellitePane')!
+      satPaneEl.style.zIndex = '300'
+      // grayscale化し、輝度・コントラストを整えてからopacity 0.38 で薄く重ねる
+      satPaneEl.style.filter = 'grayscale(1) brightness(1.18) contrast(0.82)'
+
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri',
+        maxZoom: 19,
+        opacity: 0.38,
+        pane: 'satellitePane',
       }).addTo(map)
 
       // 3. ラベルペイン — テキストのみ（背景透明・着色なし）
@@ -106,12 +104,11 @@ export default function MapView({
       const labelPaneEl = map.getPane('labelPane')!
       labelPaneEl.style.zIndex = '450'
 
-      // CartoDB light_only_labels: 文字だけのレイヤ、水域・陸地への着色なし
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19,
         subdomains: 'abcd',
-        opacity: 0.8,
+        opacity: 0.85,
         pane: 'labelPane',
       }).addTo(map)
 
