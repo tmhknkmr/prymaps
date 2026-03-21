@@ -234,14 +234,28 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
   }
 
   // 「写真を先に選ぶ」フロー — ファイル選択後にピンモードへ
-  const handlePhotoFirstSelect = useCallback(async (files: FileList | null) => {
-    if (!files || files.length === 0) return
-    const arr = Array.from(files).filter(f => f.type.startsWith('image/'))
+  const handlePhotoFirstSelect = useCallback(async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return
+    const arr = Array.from(fileList).filter(f => f.type.startsWith('image/'))
     if (arr.length === 0) return
     setPendingFiles(arr)
     setShowFlowMenu(false)
-    setPinModeSync(true)   // ファイル選択後にピンモードへ
-  }, [setPinModeSync])
+
+    // EXIFを先読みしてGPSを確認
+    const { extractExif } = await import('@/lib/image')
+    const exif = await extractExif(arr[0])
+
+    if (exif.lat !== null && exif.lng !== null) {
+      // GPS付き: まず地図をその場所へ飛ばし、ピンを立て、アニメーション後にモーダルを開く
+      const pin = { lat: exif.lat, lng: exif.lng }
+      setPendingPin(pin)
+      setFlyToTarget({ lat: exif.lat, lng: exif.lng, zoom: 15 })
+      setTimeout(() => setShowUpload(true), 1300)  // fly アニメーション(1.2s)後に表示
+    } else {
+      // GPS無し: ピンモードに入り地図クリックで場所指定
+      setPinModeSync(true)
+    }
+  }, [setPinModeSync, setFlyToTarget])
 
   // 場所検索（Nominatim / OSM）
   const handleSearch = async (e: React.FormEvent) => {
@@ -357,10 +371,16 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
             <button
               type="button"
               onClick={handleLocate}
-              className="flex items-center justify-center rounded-xl flex-shrink-0 transition"
-              style={{ width: '42px', height: '42px', background: 'rgba(255,255,255,0.96)', boxShadow: '0 2px 16px rgba(0,0,0,0.14)', fontSize: '18px' }}
+              className="flex items-center gap-1.5 rounded-xl flex-shrink-0 transition px-3"
+              style={{ height: '42px', background: 'rgba(255,255,255,0.96)', boxShadow: '0 2px 16px rgba(0,0,0,0.14)', color: '#374151' }}
               title="現在地へ"
-            >◎</button>
+            >
+              {/* 現在地アイコン（GPS矢印） */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+              </svg>
+              <span className="text-xs font-medium hidden sm:inline">現在地</span>
+            </button>
           </form>
 
           {showResults && searchResults.length > 0 && (
