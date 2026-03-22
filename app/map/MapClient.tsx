@@ -52,7 +52,13 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
 
   // 「写真を先に選ぶ」フロー
   const [showFlowMenu, setShowFlowMenu] = useState(false)
-  const [pendingFiles, setPendingFiles] = useState<File[]>([])  // 先行選択ファイル
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+
+  // 複数写真キュー
+  const [photoQueue, setPhotoQueue] = useState<File[]>([])
+  const [queueIndex, setQueueIndex] = useState(0)
+  const [queuePreviews, setQueuePreviews] = useState<string[]>([])
+
   const photoFirstInputRef = useRef<HTMLInputElement>(null)
 
   // 場所検索
@@ -233,29 +239,63 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
     window.location.href = '/'
   }
 
-  // 「写真を先に選ぶ」フロー — ファイル選択後にピンモードへ
-  const handlePhotoFirstSelect = useCallback(async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return
-    const arr = Array.from(fileList).filter(f => f.type.startsWith('image/'))
-    if (arr.length === 0) return
-    setPendingFiles(arr)
-    setShowFlowMenu(false)
+  // キューの1枚を処理（GPS判定 → fly → モーダル or ピンモード）
+  const processQueuePhoto = useCallback(async (queue: File[], idx: number) => {
+    const file = queue[idx]
+    setPendingFiles([file])
+    setPendingPin(null)
 
-    // EXIFを先読みしてGPSを確認
     const { extractExif } = await import('@/lib/image')
-    const exif = await extractExif(arr[0])
+    const exif = await extractExif(file)
 
     if (exif.lat !== null && exif.lng !== null) {
-      // GPS付き: まず地図をその場所へ飛ばし、ピンを立て、アニメーション後にモーダルを開く
-      const pin = { lat: exif.lat, lng: exif.lng }
-      setPendingPin(pin)
+      setPendingPin({ lat: exif.lat, lng: exif.lng })
       setFlyToTarget({ lat: exif.lat, lng: exif.lng, zoom: 15 })
-      setTimeout(() => setShowUpload(true), 1300)  // fly アニメーション(1.2s)後に表示
+      setTimeout(() => setShowUpload(true), 1300)
     } else {
-      // GPS無し: ピンモードに入り地図クリックで場所指定
       setPinModeSync(true)
     }
-  }, [setPinModeSync, setFlyToTarget])
+  }, [setPinModeSync])
+
+  // キューをクリアして操作を終了
+  const clearQueue = useCallback(() => {
+    setPhotoQueue([])
+    setQueueIndex(0)
+    setQueuePreviews(prev => { prev.forEach(u => URL.revokeObjectURL(u)); return [] })
+    setPendingFiles([])
+    setPendingPin(null)
+    setPinModeSync(false)
+    setShowUpload(false)
+  }, [setPinModeSync])
+
+  // 「写真を先に選ぶ」フロー — 複数選択対応（最大20枚）
+  const handlePhotoFirstSelect = useCallback(async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return
+    const arr = Array.from(fileList).filter(f => f.type.startsWith('image/')).slice(0, 20)
+    if (arr.length === 0) return
+    setShowFlowMenu(false)
+
+    if (arr.length === 1) {
+      // 1枚: 従来フロー
+      setPendingFiles(arr)
+      const { extractExif } = await import('@/lib/image')
+      const exif = await extractExif(arr[0])
+      if (exif.lat !== null && exif.lng !== null) {
+        setPendingPin({ lat: exif.lat, lng: exif.lng })
+        setFlyToTarget({ lat: exif.lat, lng: exif.lng, zoom: 15 })
+        setTimeout(() => setShowUpload(true), 1300)
+      } else {
+        setPinModeSync(true)
+      }
+    } else {
+      // 複数枚: キューに積んで1枚ずつ処理
+      const previews = arr.map(f => URL.createObjectURL(f))
+      setPhotoQueue(arr)
+      setQueuePreviews(previews)
+      setQueueIndex(0)
+      await processQueuePhoto(arr, 0)
+    }
+  }, [setPinModeSync, processQueuePhoto])
 
   // 場所検索（Nominatim / OSM）
   const handleSearch = async (e: React.FormEvent) => {
@@ -548,6 +588,59 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
       </div>
 
       {/* ══════════════════════════════════════
+          複数写真キュー進捗ストリップ
+      ══════════════════════════════════════ */}
+      {photoQueue.length > 1 && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 pointer-events-none"
+          style={{ bottom: '72px', zIndex: 1500 }}
+        >
+          <div
+            className="pointer-events-auto flex items-center gap-2 rounded-2xl px-3 py-2.5"
+            style={{ background: 'rgba(8,8,16,0.85)', backdropFilter: 'blur(12px)', boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}
+          >
+            {/* 進捗テキスト */}
+            <span className="text-xs tabular-nums mr-1" style={{ color: 'rgba(255,255,255,0.4)', minWidth: '2.8rem' }}>
+              {queueIndex + 1} / {photoQueue.length}
+            </span>
+
+            {/* サムネイルストリップ */}
+            {queuePreviews.map((preview, i) => (
+              <div
+                key={i}
+                className="relative flex-shrink-0 overflow-hidden"
+                style={{
+                  width: i === queueIndex ? '44px' : '30px',
+                  height: i === queueIndex ? '44px' : '30px',
+                  borderRadius: '6px',
+                  border: i === queueIndex ? '2px solid rgba(255,255,255,0.9)' : '1.5px solid rgba(255,255,255,0.15)',
+                  opacity: i < queueIndex ? 0.3 : i === queueIndex ? 1 : 0.55,
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                {/* 完了済みチェック */}
+                {i < queueIndex && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)' }}>✓</span>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* キャンセルボタン */}
+            <button
+              onClick={clearQueue}
+              className="ml-1 flex-shrink-0 transition"
+              style={{ color: 'rgba(255,255,255,0.25)', fontSize: '16px', lineHeight: 1, padding: '4px' }}
+              title="キューをキャンセル"
+            >✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════
           モバイル: ボトムナビゲーションバー
       ══════════════════════════════════════ */}
       <div
@@ -586,13 +679,37 @@ export default function MapClient({ userId, archive, initialLayers, mapSettings,
           defaultPin={pendingPin}
           userId={userId}
           initialFiles={pendingFiles.length > 0 ? pendingFiles : undefined}
-          onClose={() => { setShowUpload(false); setPendingPin(null); setPendingFiles([]) }}
+          onClose={() => {
+            setShowUpload(false)
+            setPendingPin(null)
+            setPendingFiles([])
+            // キューがあればスキップして次へ
+            if (photoQueue.length > 0) {
+              const next = queueIndex + 1
+              if (next < photoQueue.length) {
+                setQueueIndex(next)
+                processQueuePhoto(photoQueue, next)
+              } else {
+                clearQueue()
+              }
+            }
+          }}
           onSuccess={async () => {
             setShowUpload(false)
             setPendingPin(null)
             setPendingFiles([])
             await fetchLayers()
             await fetchPhotos()
+            // キューの次の写真へ
+            if (photoQueue.length > 0) {
+              const next = queueIndex + 1
+              if (next < photoQueue.length) {
+                setQueueIndex(next)
+                await processQueuePhoto(photoQueue, next)
+              } else {
+                clearQueue()
+              }
+            }
           }}
           onPinChange={(lat, lng) => setPendingPin({ lat, lng })}
           onGpsDetected={(lat, lng) => {
